@@ -1,11 +1,7 @@
 import asyncio
-import base64
 from datetime import datetime, timedelta
-from io import BytesIO
-from pathlib import Path
 
 import uvicorn
-from PIL import Image
 from fastapi import FastAPI, Request, HTTPException
 
 from starlette import status
@@ -21,10 +17,10 @@ from database.operations.base.white_list import WhiteListRepository
 from database.operations.content.message import MessageRepository
 from database.operations.manager.model import ModelRepository
 from external import get_group_info
-from functions import get_resume_conversation, generic_conversation
+from functions import get_resume_conversation, generic_conversation, generate_sticker
 from functions.web_search import web_search
 from log import logger
-from external.evolution import send_message, send_audio, download_image, send_sticker
+from external.evolution import send_message, send_audio, send_sticker
 from s3 import S3Client
 from tts import text_to_speech
 from utils import get_env_var
@@ -38,11 +34,12 @@ instance_name = get_env_var("INSTANCE_NAME")
 COMMANDS = [
     ("@gork", "_[Sem comando]_ Interação genérica"),
     ("!help", "Mostra os comandos disponíveis. _[Ignora o restante da mensagem]_"),
-    ("!audio", "Envia áudio como forma de resposta."),
+    ("!audio", "Envia áudio como forma de resposta. _[Adicione !english para voz em inglês]_"),
     ("!resume", "Faz um resumo das últimas 30 mensagens. _[Ignora o restante da mensagem]_"),
     ("!search", "Faz uma pesquisa por termo na internet e retorna um resumo."),
     ("!model", "Mostra um modelo sendo utilizado."),
-    ("!sticker", "Cria um sticker com base em uma imagem fornecida.")
+    ("!sticker", "Cria um sticker com base em uma imagem fornecida. _[Use | como separador de top/bottom]_"),
+    ("!engligh", "")
 ]
 
 
@@ -73,6 +70,7 @@ async def process_webhook(body: dict):
         user_repo = UserRepository(User, db)
         message_repo = MessageRepository(Message, db)
         group_repo = GroupRepository(Group, db)
+
         minio_client = S3Client()
 
         event_type = body.get("event")
@@ -85,20 +83,9 @@ async def process_webhook(body: dict):
             await logger.info("Request", body.get("instance"), body)
             remote_id = body.get("data", {}).get("key", {}).get("remoteJid", "")
             message_id = event_data["key"]["id"]
-            contact_name = body["data"]["pushName"]
+            contact_name = event_data["pushName"]
 
             message_data = event_data.get("message", {})
-            image_message = message_data.get('imageMessage')
-
-            if image_message:
-                await minio_client.connect()
-
-                image_base64 = await download_image(message_id) if message_id else None
-                caption = message_data['imageMessage'].get('caption', '')
-                #s3_file_path = await minio_client.upload_image(file_bytes, convert_to_webp=True)
-            else:
-                s3_file_path = None
-                caption = None
 
             if remote_id.endswith("@g.us"):
                 group_jid = remote_id.replace("@g.us", "")
@@ -131,7 +118,9 @@ async def process_webhook(body: dict):
                     sender_id=group.id
                 )
 
+                caption = message_data.get('imageMessage', {}).get('caption', '')
                 conversation = caption if caption else message_data.get("conversation", "")
+
                 if not conversation:
                     conversation = message_data.get("ephemeralMessage", {}).get("message", {}).get("extendedTextMessage", {}).get("text", "")
 
@@ -152,60 +141,56 @@ async def process_webhook(body: dict):
                 treated_text = conversation.strip()
                 for command, _ in COMMANDS:
                     treated_text = treated_text.replace(command, "")
+                treated_text = treated_text.strip()
 
                 if "!sticker" in conversation.lower():
-                    image_bytes = base64.b64decode(image_base64)
-
-                    img = Image.open(BytesIO(image_bytes))
-                    img.thumbnail((512, 512), Image.Resampling.LANCZOS)
-
-                    if img.mode != 'RGBA':
-                        img = img.convert('RGBA')
-
-                    buffer = BytesIO()
-                    img.save(buffer, format='WEBP', quality=95)
-                    buffer.seek(0)
-                    webp_base64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
-
+                    webp_base64 = await generate_sticker(body, treated_text)
                     await send_sticker(remote_id, webp_base64)
                     return
 
                 if "!help" in conversation.lower():
                     tt_messages = ["Comandos do Gork disponíveis."]
                     for command, desc in COMMANDS:
-                        tt_messages.append(
-                            f"*{command}* - {desc}"
-                        )
-                    await send_message(remote_id, "\n".join(tt_messages))
+                        if desc:
+                            tt_messages.append(
+                                f"*{command}* - {desc}"
+                            )
+                    tt_commands = "\n".join(tt_messages)
+                    final_message = f"{tt_commands}\n\nContribuite on https://github.com/pedrohgoncalvess/gork"
+                    await send_message(remote_id, final_message, message_id)
                     return
 
                 if "!model" in conversation.lower():
                     model_repo = ModelRepository(Model, db)
                     model = await model_repo.get_default_model()
-                    await send_message(remote_id, f"Ta sendo usado o {model.name}.")
+                    await send_message(remote_id, f"Ta sendo usado o {model.name}.", message_id)
                     return
 
                 if "!resume" in conversation.lower():
                     resume = await get_resume_conversation(user.id, group_id=group.id)
-                    await send_message(remote_id, resume)
+                    await send_message(remote_id, resume, message_id)
                     return
 
                 if "!search" in conversation.lower():
                     search = await web_search(treated_text, remote_id)
-                    await send_message(remote_id, search)
+                    await send_message(remote_id, search, message_id)
                     return
 
                 if conversation.lower() == "@gork":
-                    await send_message(remote_id, f"🤖 Robo do mito está pronto")
+                    await send_message(remote_id, f"🤖 Robo do mito está pronto", message_id)
                     return
 
                 response_message = await generic_conversation(group.id, user.name, treated_text)
                 if "!audio" in conversation.lower():
-                    audio_base64 = await text_to_speech(response_message)
-                    await send_audio(remote_id, audio_base64)
+                    english = "!english" in conversation.lower()
+                    audio_base64 = await text_to_speech(response_message, english=english)
+                    await send_audio(remote_id, audio_base64, message_id)
                     return
 
-                await send_message(remote_id, response_message)
+                model_repo = ModelRepository(Model, db)
+                default_model = await model_repo.get_default_model()
+                response_message = f"{response_message}\n\n_{default_model.name}_"
+                await send_message(remote_id, response_message, message_id)
                 return
 
             elif remote_id.endswith(".net"):
