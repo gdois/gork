@@ -3,12 +3,15 @@ import httpx
 from external.evolution.base import evolution_api, evolution_api_key, instance_name
 
 
-async def send_audio(contact_id: str, audio_base64: str):
+async def send_audio(contact_id: str, audio_base64: str, message_id: str):
     url = f"{evolution_api}/message/sendWhatsAppAudio/{instance_name}"
 
     payload = {
         "number": contact_id,
-        "audio": audio_base64
+        "audio": audio_base64,
+        "quoted": {
+            "key": {"id": message_id},
+        }
     }
 
     headers = {

@@ -3,12 +3,15 @@ import httpx
 from external.evolution.base import evolution_api, evolution_api_key, instance_name
 
 
-async def send_message(contact_id: str, message: str):
+async def send_message(contact_id: str, message: str, message_id: str ):
     url = f"{evolution_api}/message/sendText/{instance_name}"
 
     payload = {
         "number": contact_id,
-        "text": message
+        "text": message,
+        "quoted": {
+            "key": {"id": message_id},
+        }
     }
 
     headers = {
