@@ -16,20 +16,15 @@ from database.operations.base.user import UserRepository
 from database.operations.base.white_list import WhiteListRepository
 from database.operations.content.message import MessageRepository
 from database.operations.manager.model import ModelRepository
-from external import get_group_info
+from external import get_group_info, evolution_instance_key
 from functions import get_resume_conversation, generic_conversation, generate_sticker
 from functions.web_search import web_search
 from log import logger
 from external.evolution import send_message, send_audio, send_sticker
-from s3 import S3Client
 from tts import text_to_speech
-from utils import get_env_var
+
 
 app = FastAPI()
-evolution_api = get_env_var("EVOLUTION_API")
-evolution_api_key = get_env_var("API_KEY")
-instance_key = get_env_var("INSTANCE_KEY")
-instance_name = get_env_var("INSTANCE_NAME")
 
 COMMANDS = [
     ("@gork", "_[Sem comando]_ Interação genérica"),
@@ -41,7 +36,6 @@ COMMANDS = [
     ("!sticker", "Cria um sticker com base em uma imagem fornecida. _[Use | como separador de top/bottom]_"),
     ("!engligh", "")
 ]
-
 
 @app.post("/webhook/evolution")
 async def evolution_webhook(
@@ -56,7 +50,7 @@ async def evolution_webhook(
 
     api_key = body.get("apikey")
 
-    if api_key != instance_key:
+    if api_key != evolution_instance_key:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
 
     background_tasks.add_task(process_webhook, body)
@@ -70,8 +64,6 @@ async def process_webhook(body: dict):
         user_repo = UserRepository(User, db)
         message_repo = MessageRepository(Message, db)
         group_repo = GroupRepository(Group, db)
-
-        minio_client = S3Client()
 
         event_type = body.get("event")
         event_data = body.get("data")

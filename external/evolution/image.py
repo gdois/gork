@@ -2,7 +2,7 @@ from typing import Optional
 
 import httpx
 
-from external.evolution.base import instance_name, evolution_api_key, evolution_api
+from external.evolution.base import evolution_instance_name, evolution_api_key, evolution_api
 
 
 def extract_quoted_image_bytes(webhook_data: dict) -> Optional[bytes]:
@@ -32,7 +32,7 @@ def extract_quoted_image_bytes(webhook_data: dict) -> Optional[bytes]:
         return None
 
 async def send_sticker(contact_id: str, image_base64: str):
-    url = f"{evolution_api}/message/sendSticker/{instance_name}"
+    url = f"{evolution_api}/message/sendSticker/{evolution_instance_name}"
 
     payload = {
         "number": contact_id,
@@ -50,7 +50,7 @@ async def send_sticker(contact_id: str, image_base64: str):
 
 
 async def download_image(message_id: str) -> bytes:
-    media_url = f"{evolution_api}/chat/getBase64FromMediaMessage/{instance_name}"
+    media_url = f"{evolution_api}/chat/getBase64FromMediaMessage/{evolution_instance_name}"
 
     payload = {
         "message": {

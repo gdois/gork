@@ -14,15 +14,15 @@ from external.evolution import send_message
 from utils import get_env_var
 
 
-brave_key = get_env_var("BRAVE_KEY")
-brave_endpoint = get_env_var("BRAVE_API")
-
-headers = {
-    "Content-Type": "application/json",
-    "x-subscription-token": brave_key
-}
 
 async def web_search(user_question: str, contact_id: str, is_group: bool = True):
+    brave_key = get_env_var("BRAVE_KEY")
+
+    headers = {
+        "Content-Type": "application/json",
+        "x-subscription-token": brave_key
+    }
+
     async with PgConnection() as db:
         user_repo = UserRepository(User, db)
         message_repo = MessageRepository(Message, db)
@@ -66,7 +66,7 @@ async def web_search(user_question: str, contact_id: str, is_group: bool = True)
         await send_message(contact_id, message_term_formatted)
         async with httpx.AsyncClient() as client:
             params = {"q": term_search}
-            response = await client.get(f"{brave_endpoint}/res/v1/web/search", params=params, headers=headers)
+            response = await client.get("https://api.search.brave.com/res/v1/web/search", params=params, headers=headers)
             body = response.json()
             videos_data = body.get("videos", {"results": []})
             video_reference = videos_data["results"][0] if len(videos_data["results"]) > 0 else None

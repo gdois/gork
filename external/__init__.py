@@ -1,3 +1,3 @@
-from external.evolution import get_group_info
+from external.evolution import get_group_info, evolution_instance_key
 from external.openrouter import make_request_openrouter
 from external.firecrawl import get_url_content
