@@ -3,8 +3,8 @@
 
 # Personal
 .env.docker
-tts/models/en_US-ryan-high.onnx
-tts/models/en_US-ryan-high.onnx.json
+**/.onnx
+**/onnx.json
 
 ### JupyterNotebooks ###
 # gitignore template for Jupyter Notebooks
