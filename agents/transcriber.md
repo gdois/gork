@@ -1,0 +1,1 @@
+Transcribe this audio in its original language. Use proper punctuation, correct accents, and write all words in full without abbreviations.

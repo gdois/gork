@@ -29,6 +29,7 @@ CREATE TABLE "manager"."model" (
     id SERIAL,
     name TEXT NOT NULL,
     openrouter_id TEXT NOT NULL,
+    audio_input BOOLEAN DEFAULT FALSE,
     input_price NUMERIC(10, 2),
     output_price NUMERIC(10, 2),
     "default" BOOLEAN NOT NULL DEFAULT FALSE,
@@ -54,6 +55,8 @@ INSERT INTO "manager"."model" (name, openrouter_id, "default", input_price, outp
 ('Mistral Nemo', 'mistralai/mistral-nemo', false, 0.04, 0.17),
 ('Mistral Small 3', 'mistralai/mistral-small-3', false, 0.05, 0.08),
 ('Qwen 2.5 72B', 'qwen/qwen-2.5-72b-instruct', false, 0.12, 0.39);
+INSERT INTO "manager"."model"(name, openrouter_id, "default", "input_price", output_price, audio_input) VALUES
+('Gemini 2.0 Flash Lite', 'google/gemini-2.0-flash-lite-001', true, 0.075, 0.3, true);
 
 CREATE TABLE "manager"."agent" (
     id SERIAL,

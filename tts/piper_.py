@@ -9,18 +9,21 @@ from piper import SynthesisConfig, PiperVoice
 from utils import project_root
 
 
-async def text_to_speech(text: str, rate: float = 1.0, english: bool = False) -> str:
+async def text_to_speech(text: str, language: str) -> str:
     syn_config = SynthesisConfig(
         volume=1.0,
-        length_scale=1.0 / rate,
+        length_scale=1.0,
         noise_scale=0.667,
         normalize_audio=True,
     )
 
-    if not english:
-        voice = PiperVoice.load(f"{project_root}/tts/models/pt_BR-faber-medium.onnx")
-    else:
-        voice = PiperVoice.load(f"{project_root}/tts/models/en_US-ryan-high.onnx")
+    languages = {
+        "pt": f"{project_root}/tts/models/pt_BR-faber-medium.onnx",
+        "en": f"{project_root}/tts/models/en_US-ryan-high.onnx",
+        "es": f"{project_root}/tts/models/es_ES-davefx-medium.onnx"
+    }
+
+    voice = PiperVoice.load(languages.get(language if language in languages else "pt"))
 
     wav_buffer = io.BytesIO()
 
