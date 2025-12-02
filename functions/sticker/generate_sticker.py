@@ -3,7 +3,7 @@ from io import BytesIO
 
 from PIL import Image
 
-from external.evolution import download_image
+from external.evolution import download_media
 from functions.sticker import add_caption_to_image
 
 
@@ -15,9 +15,9 @@ async def generate_sticker(webhook_event: dict, caption_text: str) -> str:
     quoted_message = event_data["contextInfo"].get("stanzaId", "")
 
     if message_data.get("imageMessage"):
-        image_base64 = await download_image(message_id)
+        image_base64 = await download_media(message_id)
     elif quoted_message:
-        image_base64 = await download_image(quoted_message)
+        image_base64 = await download_media(quoted_message)
     else:
         return ""
     image_bytes = base64.b64decode(image_base64)
