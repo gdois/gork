@@ -1,3 +1,4 @@
+import json
 from datetime import datetime
 from uuid import uuid4
 
@@ -9,7 +10,7 @@ from database.operations.content.message import MessageRepository
 from services import manage_interaction
 
 
-async def generic_conversation(group_id: int, user_name: str, last_message: str) -> str:
+async def generic_conversation(group_id: int, user_name: str, last_message: str) -> dict:
 
     async with PgConnection() as db:
         user_repo = UserRepository(User, db)
@@ -44,7 +45,6 @@ async def generic_conversation(group_id: int, user_name: str, last_message: str)
         """)
 
         final_message = "\n".join(formatted_messages)
-        print(final_message)
 
         resp = await manage_interaction(db, final_message, agent_name="generic")
 
@@ -56,4 +56,4 @@ async def generic_conversation(group_id: int, user_name: str, last_message: str)
             created_at=datetime.now()
         ))
 
-        return resp
+        return json.loads(f"""{resp}""")
