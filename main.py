@@ -43,7 +43,8 @@ COMMANDS = [
     ("!model", "Mostra o modelo sendo utilizado."),
     ("!sticker", "Cria um sticker com base em uma imagem e texto fornecido. _[Use | como separador de top/bottom]_"),
     ("!engligh", ""),
-    ("!remember", "Cria um lembrete para o dia, hora e tópico solicitado. _[Ex: Lembrete para comentar amanhã as 4 da tarde]_")
+    ("!remember", "Cria um lembrete para o dia, hora e tópico solicitado. _[Ex: Lembrete para comentar amanhã as 4 da tarde]_"),
+    ("!transcribe", "Transcreve um áudio. _[Ignora o restante da mensagem]_")
 ]
 
 @app.post("/webhook/evolution")
@@ -173,6 +174,12 @@ async def process_webhook(body: dict):
                     await send_sticker(remote_id, webp_base64)
                     return
 
+                if "!transcribe" in conversation.lower():
+                    transcribed_audio = await transcribe_audio(body)
+                    transcribed_audio = f"_{transcribed_audio.strip()}_"
+                    await send_message(remote_id, transcribed_audio, message_id)
+                    return
+
                 if "!remember" in conversation.lower():
                     remember, feedback_message = await remember_generator(user.id, treated_text, group.id)
                     remember.message = f"*[LEMBRETE]* {remember.message}"
@@ -195,7 +202,7 @@ async def process_webhook(body: dict):
                                 f"*{command}* - {desc}"
                             )
                     tt_commands = "\n".join(tt_messages)
-                    final_message = f"{tt_commands}\n\nContribuite on https://github.com/pedrohgoncalvess/gork"
+                    final_message = f"{tt_commands}\n\nContribute on https://github.com/pedrohgoncalvess/gork"
                     await send_message(remote_id, final_message, message_id)
                     return
 
