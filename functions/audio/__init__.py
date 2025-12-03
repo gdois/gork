@@ -1,0 +1,1 @@
+from functions.audio.transcribe_audio import transcribe_audio
