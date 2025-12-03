@@ -1,5 +1,6 @@
 import asyncio
 from datetime import datetime, timedelta
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 import uvicorn
 from fastapi import FastAPI, Request, HTTPException
@@ -11,21 +12,27 @@ from database import PgConnection, init_agents
 from database.models.base import Group, WhiteList, User
 from database.models.content import Message
 from database.models.manager import Model
-from database.operations.base.group import GroupRepository
-from database.operations.base.user import UserRepository
-from database.operations.base.white_list import WhiteListRepository
-from database.operations.content.message import MessageRepository
-from database.operations.manager.model import ModelRepository
+from database.operations.base import GroupRepository
+from database.operations.base import UserRepository
+from database.operations.base import WhiteListRepository
+from database.operations.content import MessageRepository
+from database.operations.manager import ModelRepository
 from external import get_group_info, evolution_instance_key
-from functions import get_resume_conversation, generic_conversation, generate_sticker
+from functions import get_resume_conversation, generic_conversation, generate_sticker, remember_generator
 from functions.audio.transcribe_audio import transcribe_audio
 from functions.web_search import web_search
 from log import logger
 from external.evolution import send_message, send_audio, send_sticker
+from services.remember import set_remembers, action_remember
 from tts import text_to_speech
 
 
 app = FastAPI()
+scheduler = AsyncIOScheduler()
+
+@app.on_event("startup")
+async def startup_event():
+    scheduler.start()
 
 COMMANDS = [
     ("@gork", "_[Sem comando]_ Interação genérica"),
@@ -33,9 +40,10 @@ COMMANDS = [
     ("!audio", "Envia áudio como forma de resposta. _[Adicione !english para voz em inglês]_"),
     ("!resume", "Faz um resumo das últimas 30 mensagens. _[Ignora o restante da mensagem]_"),
     ("!search", "Faz uma pesquisa por termo na internet e retorna um resumo."),
-    ("!model", "Mostra um modelo sendo utilizado."),
-    ("!sticker", "Cria um sticker com base em uma imagem fornecida. _[Use | como separador de top/bottom]_"),
-    ("!engligh", "")
+    ("!model", "Mostra o modelo sendo utilizado."),
+    ("!sticker", "Cria um sticker com base em uma imagem e texto fornecido. _[Use | como separador de top/bottom]_"),
+    ("!engligh", ""),
+    ("!remember", "Cria um lembrete para o dia, hora e tópico solicitado. _[Ex: Lembrete para comentar amanhã as 4 da tarde]_")
 ]
 
 @app.post("/webhook/evolution")
@@ -165,6 +173,20 @@ async def process_webhook(body: dict):
                     await send_sticker(remote_id, webp_base64)
                     return
 
+                if "!remember" in conversation.lower():
+                    remember, feedback_message = await remember_generator(user.id, treated_text, group.id)
+                    remember.message = f"*[LEMBRETE]* {remember.message}"
+                    scheduler.add_job(
+                        action_remember,
+                        'date',
+                        run_date=remember.remember_at,
+                        args=[remember, remote_id],
+                        id=str(remember.id)
+                    )
+                    await send_message(remote_id, feedback_message, message_id)
+                    return
+
+
                 if "!help" in conversation.lower():
                     tt_messages = ["Comandos do Gork disponíveis."]
                     for command, desc in COMMANDS:
@@ -215,4 +237,5 @@ async def process_webhook(body: dict):
 
 if __name__ == "__main__":
     asyncio.run(init_agents())
+    asyncio.run(set_remembers(scheduler))
     uvicorn.run(app, host="0.0.0.0", port=9001)
