@@ -21,3 +21,4 @@ class User(Base):
     updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now())
 
     messages = relationship("Message", back_populates="sender")
+    remembers = relationship("Remember", back_populates="user")

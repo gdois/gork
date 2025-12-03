@@ -21,3 +21,4 @@ class Group(Base):
     updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now())
 
     messages = relationship("Message", back_populates="group")
+    remembers = relationship("Remember", back_populates="group")
