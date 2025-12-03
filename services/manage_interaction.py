@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from database.models.manager import Model, Agent, Interaction
+from database.models.manager import Model, Agent, Interaction, Command
 from database.operations.manager import ModelRepository, AgentRepository, InteractionRepository
 from external import make_request_openrouter
 
@@ -10,6 +10,7 @@ async def manage_interaction(
         user_prompt: str,
         system_prompt: str = None,
         agent_name: str = None,
+        command: Command = None,
 ) -> str:
 
     model_repo = ModelRepository(Model, db)
@@ -26,6 +27,8 @@ async def manage_interaction(
 
     now = datetime.now()
 
+
+    system_prompt = system_prompt.replace("{CURRENT_DATETIME}", now.strftime("%Y-%m-%d %H:%M:%S (%A)"))
     system_prompt = system_prompt.replace("{CURRENT_DATE}", now.strftime("%B %d, %Y"))
     system_prompt = system_prompt.replace("{CURRENT_YEAR}", str(now.year))
     system_prompt = system_prompt.replace("{CURRENT_MONTH_YEAR}", now.strftime("%B %Y"))
@@ -52,6 +55,7 @@ async def manage_interaction(
         agent_id=agent.id if agent_name else None,
         model_id=default_model.id,
         sender="user",
+        command_id=command.id if command else None,
         content=f"System: {agent.prompt}\n\nUser: {llm_resp}",
         tokens=llm_req["usage"]["prompt_tokens"]
     )
