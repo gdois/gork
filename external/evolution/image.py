@@ -47,3 +47,25 @@ async def send_sticker(contact_id: str, image_base64: str):
     async with httpx.AsyncClient() as client:
         response = await client.post(url, json=payload, headers=headers, timeout=60)
         return response.json()
+
+
+async def send_image(contact_id: str, image_base64: str):
+    url = f"{evolution_api}/message/sendMedia/{evolution_instance_name}"
+
+    payload = {
+        "number": contact_id,
+        "mediatype": "image",
+        "fileName": "gork.jpeg",
+        "media": image_base64,
+        "mimetype": "image/jpeg",
+        "caption": ""
+    }
+
+    headers = {
+        "Content-Type": "application/json",
+        "apikey": evolution_api_key
+    }
+
+    async with httpx.AsyncClient() as client:
+        response = await client.post(url, json=payload, headers=headers, timeout=60)
+        return response.json()
