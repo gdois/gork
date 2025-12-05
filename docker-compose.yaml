@@ -39,7 +39,8 @@ services:
       - ./services:/app/services:ro
       - ./tts:/app/tts:ro
       - ./utils:/app/utils:ro
-      - ./s3:/app/s3:ro
+#      - ./s3:/app/s3:ro
+      - ./scheduler:/app/scheduler:ro
 
       - ./data:/app/data:rw
       - ./database:/app/database:rw
