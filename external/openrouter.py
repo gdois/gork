@@ -12,7 +12,7 @@ def make_request_openrouter(payload: dict) -> dict:
         "Authorization": f"Bearer {get_env_var('OPENROUTER_KEY')}",
     }
 
-    with httpx.Client(timeout=30) as client:
+    with httpx.Client(timeout=120) as client:
         response = client.post(f"{OPENROUTER_ENDPOINT}/chat/completions", json=payload, headers=headers)
         response.raise_for_status()
         return response.json()
