@@ -8,6 +8,7 @@ from database.models.content import Message
 from database.operations.base.user import UserRepository
 from database.operations.content.message import MessageRepository
 from services import manage_interaction
+from utils import get_env_var
 
 
 async def generic_conversation(group_id: int, user_name: str, last_message: str) -> dict:
@@ -15,6 +16,9 @@ async def generic_conversation(group_id: int, user_name: str, last_message: str)
     async with PgConnection() as db:
         user_repo = UserRepository(User, db)
         user_gork = await user_repo.find_by_name("Gork")
+        # TODO: This SHOULD BE removed later. A better solution has to be implemented.
+        if not user_gork:
+            user_gork = await user_repo.insert(User(name="Gork", src_id=str(uuid4()), phone_number=get_env_var("EVOLUTION_INSTANCE_NUMBER")))
 
         message_repo = MessageRepository(Message, db)
         messages = await message_repo.find_by_group(group_id, 20)
@@ -47,13 +51,14 @@ async def generic_conversation(group_id: int, user_name: str, last_message: str)
         final_message = "\n".join(formatted_messages)
 
         resp = await manage_interaction(db, final_message, agent_name="generic")
+        formatted_resp = json.loads(f"""{resp}""")
 
         _ = await message_repo.insert(Message(
             message_id=str(uuid4()),
             group_id = group_id,
             sender_id=user_gork.id,
-            content=resp,
+            content=formatted_resp.get("text"),
             created_at=datetime.now()
         ))
 
-        return json.loads(f"""{resp}""")
+        return formatted_resp
