@@ -107,7 +107,11 @@ async def web_search(user_question: str, contact_id: str, is_group: bool = True)
                 source = web_references[idx]
                 url = source["url"]
                 content = get_url_content(url)
-                print(content)
+                if not content:
+                    not_selected_web_sources = [idx for idx, _  in enumerate(web_references) if idx not in tt_web_sources]
+                    tt_web_sources.append(not_selected_web_sources[0])
+                    continue
+
                 tt_final_sources.append(f"""
                     Title: {source["title"]}
                     URL: {source["url"]}
