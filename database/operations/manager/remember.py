@@ -1,7 +1,8 @@
 # database/repositories/remember_repository.py
 from typing import Optional, List
 from datetime import datetime
-from sqlalchemy import and_, or_
+
+from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import aliased
 
 from database.models.base import User, Group
@@ -25,10 +26,10 @@ class RememberRepository(BaseRepository[Remember]):
         G = aliased(Group)
 
         query = (
-            self.session.query(Remember, U.phone_number.label("user_src_id"), G.src_id.label("group_src_id"))
+            select(Remember, U.phone_number, G.src_id)
             .outerjoin(U, Remember.user_id == U.id)
             .outerjoin(G, Remember.group_id == G.id)
-            .filter(
+            .where(
                 and_(
                     Remember.deleted_at.is_(None),
                     Remember.remember_at <= limit_datetime
@@ -37,7 +38,7 @@ class RememberRepository(BaseRepository[Remember]):
             .order_by(Remember.remember_at)
         )
 
-        result = await self.session.execute(query)
+        result = await self.db.execute(query)
         rows = result.all()
 
         return rows
