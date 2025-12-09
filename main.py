@@ -14,10 +14,10 @@ app.include_router(webhook_evolution_router)
 
 @app.on_event("startup")
 async def startup_event():
+    await init_agents()
+    await set_remembers(scheduler)
     scheduler.start()
 
 
 if __name__ == "__main__":
-    asyncio.run(init_agents())
-    asyncio.run(set_remembers(scheduler))
-    uvicorn.run(app, host="0.0.0.0", port=9001)
+    uvicorn.run(app, host="0.0.0.0", port=90001)
