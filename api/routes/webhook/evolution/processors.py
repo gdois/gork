@@ -4,7 +4,8 @@ from typing import Optional
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.routes.webhook.evolution.handles import is_message_too_old, extract_conversation_text
+from api.routes.webhook.evolution.handles import is_message_too_old, extract_conversation_text, handle_media, \
+    handle_consumption_command
 from api.routes.webhook.evolution.handles import (
     clean_text, has_explicit_command, handle_help_command,
     handle_generic_conversation, handle_remember_command, handle_sticker_command, handle_image_command,
@@ -15,10 +16,8 @@ from database.models.content import Message
 from database.operations.base import UserRepository, GroupRepository, WhiteListRepository
 from database.operations.content import MessageRepository
 from external import get_group_info
-from external.evolution import send_audio, send_message
-from functions import transcribe_audio, generic_conversation
-from functions.intent import classify_intent
-from tts import text_to_speech
+from external.evolution import send_message
+from functions import transcribe_audio, classify_intent
 from utils import get_env_var
 
 
@@ -98,26 +97,9 @@ async def process_group_message(
     if not is_mention:
         return
 
-    audio_message = event_data.get("contextInfo", {}).get("quotedMessage", {}).get("audioMessage")
-    ephemeral_audio = (
-        event_data.get("message", {})
-        .get("ephemeralMessage", {})
-        .get("message", {})
-        .get("extendedTextMessage", {})
-        .get("contextInfo", {})
-        .get("quotedMessage", {})
-        .get("ephemeralMessage", {})
-        .get("message", {})
-        .get("audioMessage")
-    )
-
-    if audio_message or ephemeral_audio:
-        transcribed = await transcribe_audio(body)
-        response = await generic_conversation(group.id, user.name, transcribed)
-        language = response.get("language")
-        audio_base64 = await text_to_speech(response.get("text"), language)
-        await send_audio(remote_id, audio_base64, message_id)
-        return
+    medias = handle_media(body)
+    if "audio_message" in medias:
+        conversation = await transcribe_audio(body, user.id, group.id)
 
     if conversation in [f"@{instance_number}", f"@{user_gork.src_id}"]:
         await send_message(remote_id, "🤖 Robo do mito está pronto", message_id)
@@ -131,7 +113,8 @@ async def process_group_message(
         body,
         group.id,
         db,
-        scheduler
+        scheduler,
+        medias
     )
 
 
@@ -179,9 +162,11 @@ async def process_private_message(
         )
         return
 
-    treated_text = clean_text(conversation)
+    medias = handle_media(body)
+    if "audio_message" in medias:
+        conversation = await transcribe_audio(body, user.id, group_id=None)
 
-    if not treated_text:
+    if "!status" in conversation:
         await send_message(number, "🤖 Robo do mito está pronto", message_id)
         return
 
@@ -193,7 +178,8 @@ async def process_private_message(
         body,
         None,
         db,
-        scheduler
+        scheduler,
+        medias
     )
 
 
@@ -221,12 +207,12 @@ async def process_explicit_commands(
         return
 
     if "!transcribe" in conversation.lower():
-        await handle_transcribe_command(remote_id, message_id, body)
+        await handle_transcribe_command(remote_id, message_id, body, user.id, group_id)
         return
 
     if "!search" in conversation.lower():
         group = True if group_id else False
-        await handle_search_command(remote_id, message_id, treated_text, group)
+        await handle_search_command(remote_id, message_id, treated_text, group, user.id)
         return
 
     if "!image" in conversation.lower():
@@ -243,8 +229,19 @@ async def process_explicit_commands(
         )
         return
 
+    if "!consumption" in conversation.lower():
+        if group_id:
+            await handle_consumption_command(
+                remote_id, group_id=group_id
+            )
+        else:
+            await handle_consumption_command(
+                remote_id, user_id=user.id
+            )
+        return
+
     await handle_generic_conversation(
-        remote_id, message_id, user.name, treated_text, conversation, group_id
+        remote_id, message_id, user, treated_text, group_id
     )
 
 
@@ -256,7 +253,8 @@ async def process_commands(
         body: dict,
         group_id: Optional[int],
         db: AsyncSession,
-        scheduler: AsyncIOScheduler
+        scheduler: AsyncIOScheduler,
+        medias: list[str]
 ):
     treated_text = clean_text(conversation)
 
@@ -270,7 +268,7 @@ async def process_commands(
     else:
         await process_intent_based_commands(
             conversation, remote_id, message_id, user,
-            body, group_id, treated_text, db, scheduler
+            body, group_id, treated_text, db, scheduler, medias
         )
 
 
@@ -283,17 +281,18 @@ async def process_intent_based_commands(
         group_id: Optional[int],
         treated_text: str,
         db: AsyncSession,
-        scheduler: AsyncIOScheduler
+        scheduler: AsyncIOScheduler,
+        medias: list[str]
 ):
-    intent, wants_audio = await classify_intent(conversation, db, COMMANDS)
+    intent, wants_audio = await classify_intent(conversation, db, COMMANDS, medias, user.id, group_id)
     is_group = True if group_id else False
 
     intent_handlers = {
         "help": lambda: handle_help_command(remote_id, message_id),
         "model": lambda: handle_model_command(remote_id, message_id, db),
         "resume": lambda: handle_resume_command(remote_id, message_id, user.id, group_id),
-        "transcribe": lambda: handle_transcribe_command(remote_id, message_id, body),
-        "search": lambda: handle_search_command(remote_id, message_id, treated_text, is_group),
+        "transcribe": lambda: handle_transcribe_command(remote_id, message_id, body, user.id, group_id),
+        "search": lambda: handle_search_command(remote_id, message_id, treated_text, is_group, user.id),
         "image": lambda: handle_image_command(remote_id, user.id, treated_text, body, group_id),
         "sticker": lambda: handle_sticker_command(remote_id, body, treated_text),
         "remember": lambda: handle_remember_command(scheduler, remote_id, message_id, user.id, treated_text, group_id),
@@ -304,8 +303,6 @@ async def process_intent_based_commands(
     if handler:
         await handler()
     else:
-        modified_conversation = f"!audio {conversation}" if wants_audio else conversation
-
         await handle_generic_conversation(
-            remote_id, message_id, user.name, treated_text, modified_conversation, group_id
+            remote_id, message_id, user, treated_text, group_id, wants_audio
         )

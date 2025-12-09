@@ -16,7 +16,7 @@ async def process_webhook(body: dict, scheduler: AsyncIOScheduler):
         await logger.info("Request", body.get("instance"), body)
 
         remote_id = event_data.get("key", {}).get("remoteJid", "")
-        alt_id = event_data.get("key", {}).get("remoteJidAlt", "") # NO MEU É O NUMERO DO TELEFONE
+        alt_id = event_data.get("key", {}).get("remoteJidAlt", "")
         message_data = event_data.get("message", {})
 
         if remote_id.endswith(".net"):
