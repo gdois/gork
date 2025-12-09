@@ -1,5 +1,6 @@
 from datetime import datetime
 from typing import Optional
+from zoneinfo import ZoneInfo
 
 from database.models.manager import Model, Agent, Interaction, Command
 from database.operations.manager import ModelRepository, AgentRepository, InteractionRepository
@@ -28,7 +29,7 @@ async def manage_interaction(
     if system_prompt is None and agent_name is not None:
         system_prompt = agent.prompt
 
-    now = datetime.now()
+    now = datetime.now(ZoneInfo("America/Sao_Paulo"))
 
     system_prompt = system_prompt.replace("{CURRENT_DATETIME}", now.strftime("%Y-%m-%d %H:%M:%S (%A)"))
     system_prompt = system_prompt.replace("{CURRENT_DATE}", now.strftime("%B %d, %Y"))
@@ -62,7 +63,8 @@ async def manage_interaction(
         user_prompt=user_prompt,
         response=resp,
         input_tokens=req["usage"]["prompt_tokens"],
-        output_tokens=req["usage"]["completion_tokens"]
+        output_tokens=req["usage"]["completion_tokens"],
+        system_behavior=system_prompt
     )
 
     return resp
