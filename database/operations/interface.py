@@ -1,6 +1,6 @@
 from typing import TypeVar, Generic, Type, Optional, List, Dict, Any
 
-from sqlalchemy import select, update, delete, func
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
 
