@@ -1,6 +1,7 @@
 from typing import Optional, List
 from datetime import datetime
 
+from sqlalchemy.orm import joinedload
 from sqlalchemy import select, and_, desc
 
 from database.models.content import Message
@@ -14,9 +15,10 @@ class MessageRepository(BaseRepository[Message]):
     async def find_by_sender(self, sender_id: int, limit: int = 50) -> List[Message]:
         result = await self.db.execute(
             select(Message)
+            .options(joinedload(Message.sender))
             .filter(
                 and_(
-                    Message.sender_id == sender_id,
+                    Message.user_id == sender_id,
                     Message.deleted_at.is_(None)
                 )
             )
@@ -26,8 +28,6 @@ class MessageRepository(BaseRepository[Message]):
         return list(result.scalars().all())
 
     async def find_by_group(self, group_id: int, limit: int = 50) -> List[Message]:
-        from sqlalchemy.orm import joinedload
-
         result = await self.db.execute(
             select(Message)
             .options(joinedload(Message.sender))
@@ -53,7 +53,7 @@ class MessageRepository(BaseRepository[Message]):
             .filter(
                 and_(
                     Message.group_id == group_id,
-                    Message.sender_id == sender_id,
+                    Message.user_id == sender_id,
                     Message.deleted_at.is_(None)
                 )
             )
@@ -79,7 +79,7 @@ class MessageRepository(BaseRepository[Message]):
         if group_id:
             filters.append(Message.group_id == group_id)
         if sender_id:
-            filters.append(Message.sender_id == sender_id)
+            filters.append(Message.user_id == sender_id)
 
         result = await self.db.execute(
             select(Message)
@@ -109,7 +109,7 @@ class MessageRepository(BaseRepository[Message]):
 
         new_message = Message(
             message_id=message_id,
-            sender_id=sender_id,
+            user_id=sender_id,
             group_id=group_id,
             content=content,
             created_at=created_at
@@ -122,19 +122,6 @@ class MessageRepository(BaseRepository[Message]):
             return False
 
         return await self.update(message.id, {"deleted_at": datetime.now()}) is not None
-
-    async def count_by_sender(self, sender_id: int) -> int:
-        from sqlalchemy import func as sql_func
-        result = await self.db.execute(
-            select(sql_func.count(Message.id))
-            .filter(
-                and_(
-                    Message.sender_id == sender_id,
-                    Message.deleted_at.is_(None)
-                )
-            )
-        )
-        return result.scalar_one()
 
     async def count_by_group(self, group_id: int) -> int:
         from sqlalchemy import func as sql_func
