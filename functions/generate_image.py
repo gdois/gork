@@ -19,7 +19,8 @@ async def generate_image(user_id: int, user_message: str, webhook_event: dict, g
 
         message_data = event_data["message"]
 
-        quoted_message_id = event_data.get("contextInfo", {}).get("stanzaId", "")
+        context_info = event_data.get("contextInfo", {}) if event_data.get("contextInfo") is not None else {}
+        quoted_message_id = context_info.get("stanzaId")
         if not quoted_message_id:
             quoted_message_id = (
                 event_data.get("message", {})
@@ -67,10 +68,10 @@ async def generate_image(user_id: int, user_message: str, webhook_event: dict, g
             "messages": messages
             }
 
-        result = make_request_openrouter(payload)
+        req = make_request_openrouter(payload)
 
-        if result.get("choices"):
-            message = result["choices"][0]["message"]
+        if req.get("choices"):
+            message = req["choices"][0]["message"]
             if message.get("images"):
                 image = message["images"][0]["image_url"]["url"]
                 if image.startswith("data:"):
@@ -98,20 +99,15 @@ async def generate_image(user_id: int, user_message: str, webhook_event: dict, g
         )
 
         interaction_repo = InteractionRepository(Interaction, db)
-        first_iter = await interaction_repo.create_interaction(
-            model_id=default_image_model.id,
-            sender="user",
-            command_id=new_command.id,
-            content=f"User: {user_message}" + f"\n\nImage: {image}" if image else "",
-            tokens=result["usage"]["prompt_tokens"]
-        )
-
         _ = await interaction_repo.create_interaction(
-            interaction_id=first_iter.id,
             model_id=default_image_model.id,
-            sender="assistant",
-            content=webp_base64,
-            tokens=result["usage"]["completion_tokens"]
+            user_id=user_id,
+            command_id=new_command.id,
+            user_prompt=user_message,
+            response=webp_base64,
+            input_tokens=req["usage"]["prompt_tokens"],
+            output_tokens=req["usage"]["completion_tokens"],
+            group_id=group_id
         )
 
         return webp_base64, False

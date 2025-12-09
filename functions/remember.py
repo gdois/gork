@@ -19,7 +19,7 @@ async def remember_generator(user_id: int, message: str, group_id: int = None) -
             command="!remember",
             group_id=group_id,
         ))
-        resp = await manage_interaction(db, message, agent_name="remember-formatter", command=new_command)
+        resp = await manage_interaction(db, message, agent_name="remember-formatter", command=new_command, user_id=user_id, group_id=group_id)
         formatted_resp = json.loads(f"""{resp}""")
         time_remember = datetime.strptime(formatted_resp.get("datetime"), "%Y-%m-%d %H:%M:%S")
         message = formatted_resp.get("message")

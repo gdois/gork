@@ -1,16 +1,17 @@
 import base64
 from io import BytesIO
+from typing import Optional
 
 import soundfile as sf
 
 from database import PgConnection
-from database.models.manager import Interaction, Model, Agent
-from database.operations.manager import InteractionRepository, ModelRepository, AgentRepository
+from database.models.manager import Interaction, Model, Agent, Command
+from database.operations.manager import InteractionRepository, ModelRepository, AgentRepository, CommandRepository
 from external import make_request_openrouter
 from external.evolution import download_media
 
 
-async def transcribe_audio(webhook_data:dict) -> str:
+async def transcribe_audio(webhook_data:dict, user_id: int, group_id: Optional[int], command: bool = False) -> str:
     async with PgConnection() as db:
         model_repo = ModelRepository(Model, db)
         agent_repo = AgentRepository(Agent, db)
@@ -19,17 +20,23 @@ async def transcribe_audio(webhook_data:dict) -> str:
         audio_model = await model_repo.get_default_audio_model()
 
         event_data = webhook_data["data"]
-        quoted_message_id = event_data.get("contextInfo", {}).get("stanzaId")
-        if not quoted_message_id:
-            quoted_message_id = (
-                event_data.get("message", {})
-                .get("ephemeralMessage", {})
-                .get("message", {})
-                .get("extendedTextMessage", {})
-                .get("contextInfo", {})
-                .get("stanzaId")
-            )
-        audio_base64 = await download_media(quoted_message_id)
+        context_info = event_data.get("contextInfo", {}) if event_data.get("contextInfo") is not None else {}
+
+        audio_message = event_data.get("message", {}).get("audioMessage")
+        if audio_message:
+            message_id = event_data["key"]["id"]
+        else:
+            message_id = context_info.get("stanzaId")
+            if not message_id:
+                message_id = (
+                    event_data.get("message", {})
+                    .get("ephemeralMessage", {})
+                    .get("message", {})
+                    .get("extendedTextMessage", {})
+                    .get("contextInfo", {})
+                    .get("stanzaId")
+                )
+        audio_base64 = await download_media(message_id)
         audio_bytes = base64.b64decode(audio_base64)
         audio_data, sample_rate = sf.read(BytesIO(audio_bytes))
 
@@ -62,22 +69,26 @@ async def transcribe_audio(webhook_data:dict) -> str:
         req = make_request_openrouter(payload)
         resp = req["choices"][0]["message"]["content"]
 
-        interaction_repo = InteractionRepository(Interaction, db)
-        first_interac = await interaction_repo.create_interaction(  # TODO: compress in just one interaction in the dat
-            model_id = audio_model.id,
-            sender = "user",
-            agent_id = transcriber_agent.id,
-            content = f"System: {transcriber_agent.prompt}\n\nUser: {base64_audio}",
-            tokens = req["usage"]["prompt_tokens"]
-        )
+        if command:
+            command_repo = CommandRepository(Command, db)
+            new_command = await command_repo.create_command(
+                "transcribe",
+                user_id
+            )
+        else:
+            new_command = None
 
+        interaction_repo = InteractionRepository(Interaction, db)
         _ = await interaction_repo.create_interaction(
             model_id=audio_model.id,
-            sender="assistant",
+            user_id=user_id,
             agent_id=transcriber_agent.id,
-            content=resp,
-            tokens=req["usage"]["prompt_tokens"],
-            interaction_id=first_interac.id
+            command_id=new_command.id if new_command else None,
+            user_prompt=base64_audio,
+            response=resp,
+            group_id=group_id,
+            input_tokens=req["usage"]["prompt_tokens"],
+            output_tokens=req["usage"]["completion_tokens"]
         )
 
         return resp

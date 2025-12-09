@@ -15,7 +15,7 @@ from utils import get_env_var
 
 
 
-async def web_search(user_question: str, contact_id: str, is_group: bool = True):
+async def web_search(user_question: str, user_id: int, contact_id: str, is_group: bool = True):
     brave_key = get_env_var("BRAVE_KEY")
 
     headers = {
@@ -60,8 +60,8 @@ async def web_search(user_question: str, contact_id: str, is_group: bool = True)
 
         final_message = "\n".join(formatted_messages)
 
-        term_search = await manage_interaction(db, final_message, agent_name="term-search")
-        message_term_formatted = await manage_interaction(db, term_search, agent_name="term-formatter")
+        term_search = await manage_interaction(db, final_message, agent_name="term-search", user_id=user_id, group_id=group.id if is_group else None)
+        message_term_formatted = await manage_interaction(db, term_search, agent_name="term-formatter", user_id=user_id, group_id=group.id if is_group else None)
 
         await send_message(contact_id, message_term_formatted)
         async with httpx.AsyncClient() as client:
@@ -99,7 +99,7 @@ async def web_search(user_question: str, contact_id: str, is_group: bool = True)
             {final_message_sources}
             """
 
-            web_sources = await manage_interaction(db, final_message_source_selector, agent_name="source-selector")
+            web_sources = await manage_interaction(db, final_message_source_selector, agent_name="source-selector", user_id=user_id, group_id=group.id if is_group else None)
             tt_web_sources = [int(idx.strip()) for idx in web_sources.split(",")]
 
             tt_final_sources = []
@@ -141,6 +141,6 @@ async def web_search(user_question: str, contact_id: str, is_group: bool = True)
 
             final_message_tt_sources = final_message_tt_sources if video_mention else final_message_sources + f"\n\nVideo source: {video_mention}"
 
-            resume = await manage_interaction(db, final_message_tt_sources, agent_name="source-resumer")
+            resume = await manage_interaction(db, final_message_tt_sources, agent_name="source-resumer", user_id=user_id, group_id=group.id if is_group else None)
 
             return resume

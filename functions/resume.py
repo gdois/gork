@@ -89,7 +89,8 @@ async def get_resume_conversation(user_id: int, contact_id: int = None, group_id
             ],
         }
 
-        llm_resp = make_request_openrouter(payload)
+        req = make_request_openrouter(payload)
+        conversation_resume = req["choices"][0]["message"]["content"]
 
         command = await command_repo.insert(
             Command(
@@ -101,19 +102,14 @@ async def get_resume_conversation(user_id: int, contact_id: int = None, group_id
 
         interaction_repo = InteractionRepository(Interaction, db)
         _ = await interaction_repo.create_interaction(
-            model_id = model.id,
-            sender = "user",
-            content = final_message,
-            tokens = llm_resp["usage"]["prompt_tokens"],
-            command_id = command.id,
+            model_id=model.id,
+            user_id=user_id,
+            command_id=command.id,
+            user_prompt=final_message,
+            system_behavior=system_prompt,
+            response=conversation_resume,
+            input_tokens=req["usage"]["prompt_tokens"],
+            output_tokens=req["usage"]["completion_tokens"]
         )
 
-        _ = await interaction_repo.create_interaction(
-            model_id = model.id,
-            sender = "assistant",
-            content = system_prompt,
-            tokens = llm_resp["usage"]["completion_tokens"],
-            command_id = command.id,
-        )
-
-        return llm_resp["choices"][0]["message"]["content"]
+        return conversation_resume
