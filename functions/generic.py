@@ -11,7 +11,7 @@ from services import manage_interaction
 from utils import get_env_var
 
 
-async def generic_conversation(group_id: int, user_name: str, last_message: str) -> dict:
+async def generic_conversation(contact_id: int, user_name: str, last_message: str, user_id: int, is_group: bool = True) -> dict:
 
     async with PgConnection() as db:
         user_repo = UserRepository(User, db)
@@ -21,7 +21,10 @@ async def generic_conversation(group_id: int, user_name: str, last_message: str)
             user_gork = await user_repo.insert(User(name="Gork", src_id=str(uuid4()), phone_number=get_env_var("EVOLUTION_INSTANCE_NUMBER")))
 
         message_repo = MessageRepository(Message, db)
-        messages = await message_repo.find_by_group(group_id, 20)
+        if is_group:
+            messages = await message_repo.find_by_group(contact_id, 20)
+        else:
+            messages = await message_repo.find_by_sender(contact_id, 15)
 
         formatted_messages = []
         existing_messages = []
@@ -50,13 +53,13 @@ async def generic_conversation(group_id: int, user_name: str, last_message: str)
 
         final_message = "\n".join(formatted_messages)
 
-        resp = await manage_interaction(db, final_message, agent_name="generic")
+        resp = await manage_interaction(db, final_message, agent_name="generic", user_id=user_id, group_id=contact_id if is_group else None)
         formatted_resp = json.loads(f"""{resp}""")
 
         _ = await message_repo.insert(Message(
             message_id=str(uuid4()),
-            group_id = group_id,
-            sender_id=user_gork.id,
+            group_id = contact_id if is_group else None,
+            user_id=user_gork.id,
             content=formatted_resp.get("text"),
             created_at=datetime.now()
         ))
