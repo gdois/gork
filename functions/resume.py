@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 
-from database import get_db, PgConnection
+from database import PgConnection
 from database.models.content import Message
 from database.models.manager import Model, Command
 from database.models.manager.interaction import Interaction
@@ -89,7 +89,7 @@ async def get_resume_conversation(user_id: int, contact_id: int = None, group_id
             ],
         }
 
-        req = make_request_openrouter(payload)
+        req = await make_request_openrouter(payload)
         conversation_resume = req["choices"][0]["message"]["content"]
 
         command = await command_repo.insert(
@@ -104,6 +104,7 @@ async def get_resume_conversation(user_id: int, contact_id: int = None, group_id
         _ = await interaction_repo.create_interaction(
             model_id=model.id,
             user_id=user_id,
+            group_id=None,
             command_id=command.id,
             user_prompt=final_message,
             system_behavior=system_prompt,

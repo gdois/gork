@@ -66,7 +66,7 @@ async def transcribe_audio(webhook_data:dict, user_id: int, group_id: Optional[i
             ]
         }
 
-        req = make_request_openrouter(payload)
+        req = await make_request_openrouter(payload)
         resp = req["choices"][0]["message"]["content"]
 
         if command:
