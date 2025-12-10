@@ -142,9 +142,9 @@ class InteractionRepository(BaseRepository[Interaction]):
             user_id: int,
             group_id: Optional[int],
             user_prompt: str,
-            response: str,
             input_tokens: int,
-            output_tokens: int,
+            output_tokens: Optional[int] = None,
+            response: Optional[str] = None,
             command_id: Optional[int] = None,
             agent_id: Optional[int] = None,
             system_behavior: Optional[str] = None

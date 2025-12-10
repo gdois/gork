@@ -18,10 +18,10 @@ class Interaction(Base):
     user_id = Column(Integer, ForeignKey("base.user.id"), nullable=False)
     group_id = Column(Integer, ForeignKey("base.group.id"))
     user_prompt = Column(Text, nullable=False)
-    response = Column(Text, nullable=False)
+    response = Column(Text)
     system_behavior = Column(Text)
     input_tokens = Column(Integer, nullable=False)
-    output_tokens = Column(Integer, nullable=False)
+    output_tokens = Column(Integer)
     inserted_at = Column(
         TIMESTAMP(timezone=True),
         server_default=func.timezone('America/Sao_Paulo', func.now()),

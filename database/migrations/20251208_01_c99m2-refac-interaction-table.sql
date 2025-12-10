@@ -12,9 +12,9 @@ CREATE TABLE "manager"."interaction" (
     agent_id INTEGER,
     user_prompt TEXT NOT NULL,
     system_behavior TEXT,
-    response TEXT NOT NULL,
+    response TEXT,
     input_tokens INTEGER NOT NULL,
-    output_tokens INTEGER NOT NULL,
+    output_tokens INTEGER,
     inserted_at TIMESTAMPTZ NOT NULL DEFAULT (NOW() AT TIME ZONE 'America/Sao_Paulo'),
 
     CONSTRAINT interaction_pk PRIMARY KEY (id),
