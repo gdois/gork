@@ -1,6 +1,6 @@
 from sqlalchemy import (
     Column, Integer, String, Text,
-    TIMESTAMP, func, ForeignKey
+    TIMESTAMP, func, ForeignKey, UUID, text
 )
 from sqlalchemy.orm import relationship
 
@@ -12,6 +12,8 @@ class Message(Base):
     __table_args__ = {"schema": "content"}
 
     id = Column(Integer, primary_key=True)
+    ext_id = Column(UUID, unique=True, nullable=False, server_default=text("uuid_generate_v4()"))
+
     message_id = Column(String(255), unique=True, nullable=False)
 
     user_id = Column(Integer, ForeignKey("base.user.id"))
