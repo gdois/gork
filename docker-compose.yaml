@@ -1,7 +1,7 @@
 services:
   postgres:
     container_name: gork_postgres
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     restart: always
     environment:
       POSTGRES_USER: admin
@@ -39,7 +39,7 @@ services:
       - ./services:/app/services:ro
       - ./tts:/app/tts:ro
       - ./utils:/app/utils:ro
-#      - ./s3:/app/s3:ro
+      - ./s3:/app/s3:ro
       - ./scheduler:/app/scheduler:ro
 
       - ./data:/app/data:rw

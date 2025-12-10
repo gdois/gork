@@ -1,8 +1,6 @@
 database/migrations
 .env
 .env.example
-pyproject.toml
-uv.lock
 yoyo.ini
 LICENSE
 .python-version
