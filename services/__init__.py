@@ -1,2 +1,4 @@
 from services.manage_interaction import manage_interaction
 from services.remember import set_remembers, action_remember
+from services.translator import translate_to_pt
+from services.save_image import materialize_image

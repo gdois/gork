@@ -50,7 +50,7 @@ async def manage_interaction(
         ]
     }
 
-    req = make_request_openrouter(payload_term_formatter)
+    req = await make_request_openrouter(payload_term_formatter)
     resp = req["choices"][0]["message"]["content"]
 
     interaction_repo = InteractionRepository(Interaction, db)
