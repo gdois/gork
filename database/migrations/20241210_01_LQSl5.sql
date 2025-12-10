@@ -54,7 +54,9 @@ INSERT INTO "manager"."model" (name, openrouter_id, "default", input_price, outp
 ('Mistral Large 2', 'mistralai/mistral-large-2', false, 3.00, 9.00),
 ('Mistral Nemo', 'mistralai/mistral-nemo', false, 0.04, 0.17),
 ('Mistral Small 3', 'mistralai/mistral-small-3', false, 0.05, 0.08),
-('Qwen 2.5 72B', 'qwen/qwen-2.5-72b-instruct', false, 0.12, 0.39);
+('Qwen 2.5 72B', 'qwen/qwen-2.5-72b-instruct', false, 0.12, 0.39),
+('Qwen2.5 Coder 7B', 'qwen/qwen2.5-coder-7b-instruct', false, 0.03, 0.09);
+
 INSERT INTO "manager"."model"(name, openrouter_id, "default", "input_price", output_price, audio_input) VALUES
 ('Gemini 2.0 Flash Lite', 'google/gemini-2.0-flash-lite-001', true, 0.075, 0.3, true);
 
@@ -115,8 +117,6 @@ CREATE TABLE "base"."user" (
     CONSTRAINT user_pk PRIMARY KEY (id),
     CONSTRAINT user_media_fk FOREIGN KEY (media_id) REFERENCES "content"."media"(id)
 );
-
-INSERT INTO "base"."user" (src_id, name) VALUES (uuid_generate_v4(), 'Gork');
 
 CREATE TABLE "base"."group" (
     id SERIAL,
