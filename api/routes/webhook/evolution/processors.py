@@ -5,7 +5,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.routes.webhook.evolution.handles import is_message_too_old, extract_conversation_text, handle_media, \
-    handle_consumption_command
+    handle_consumption_command, handle_describe_image_command
 from api.routes.webhook.evolution.handles import (
     clean_text, has_explicit_command, handle_help_command,
     handle_generic_conversation, handle_remember_command, handle_sticker_command, handle_image_command,
@@ -217,6 +217,10 @@ async def process_explicit_commands(
 
     if "!image" in conversation.lower():
         await handle_image_command(remote_id, user.id, treated_text, body, group_id)
+        return
+
+    if "!describe" in conversation.lower():
+        await handle_describe_image_command(remote_id, user.id, treated_text, body, group_id)
         return
 
     if "!sticker" in conversation.lower():

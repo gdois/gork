@@ -1,7 +1,6 @@
 import re
 from datetime import datetime, timedelta
 from typing import Optional
-from textwrap import dedent
 from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -10,7 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from database.models.base import User
 from database.models.manager import Model
 from database.operations.manager import ModelRepository
-from functions import get_resume_conversation, generic_conversation, generate_sticker, remember_generator, generate_image
+from functions import get_resume_conversation, generic_conversation, generate_sticker, remember_generator, \
+    generate_image, describe_image
 from functions.tokens import token_consumption
 from functions.transcribe_audio import transcribe_audio
 from functions.web_search import web_search
@@ -20,19 +20,19 @@ from tts import text_to_speech
 
 
 COMMANDS = [
-    ("@Gork", "Interação genérica. _[Menção necessária apenas quando em grupos]_"),
-    ("!help", "Mostra os comandos disponíveis. _[Ignora o restante da mensagem]_"),
-    ("!audio", "Envia áudio como forma de resposta. _[Adicione !english para voz em inglês]_"),
-    ("!resume", "Faz um resumo das últimas 30 mensagens. _[Ignora o restante da mensagem]_"),
-    ("!search", "Faz uma pesquisa por termo na internet e retorna um resumo."),
-    ("!model", "Mostra o modelo sendo utilizado."),
-    ("!sticker", "Cria um sticker com base em uma imagem e texto fornecido. _[Use | como separador de top/bottom]_"),
-    ("!english", ""),
-    ("!remember",
-     "Cria um lembrete para o dia, hora e tópico solicitado. _[Ex: Lembrete para comentar amanhã as 4 da tarde]_"),
-    ("!transcribe", "Transcreve um áudio. _[Ignora o restante da mensagem]_"),
-    ("!image", "Gera ou modifica uma imagem mencionada."),
-    ("!consumption", "Gera relatório de consumo de grupos e usuários.")
+    ("@Gork", "Interação genérica. _[Menção necessária apenas quando em grupos]_", "interaction"),
+    ("!help", "Mostra os comandos disponíveis. _[Ignora o restante da mensagem]_", "utility"),
+    ("!audio", "Envia áudio como forma de resposta. _[Adicione !english para voz em inglês]_", "audio"),
+    ("!resume", "Faz um resumo das últimas 30 mensagens. _[Ignora o restante da mensagem]_", "utility"),
+    ("!search", "Faz uma pesquisa por termo na internet e retorna um resumo.", "search"),
+    ("!model", "Mostra o modelo sendo utilizado.", "search"),
+    ("!sticker", "Cria um sticker com base em uma imagem e texto fornecido. _[Use | como separador de top/bottom]_", "image"),
+    ("!english", "", "hidden"),
+    ("!remember", "Cria um lembrete para o dia, hora e tópico solicitado. _[Ex: Lembrete para comentar amanhã as 4 da tarde]_", "reminder"),
+    ("!transcribe", "Transcreve um áudio. _[Ignora o restante da mensagem]_", "audio"),
+    ("!image", "Gera ou modifica uma imagem mencionada.", "image"),
+    ("!consumption", "Gera relatório de consumo de grupos e usuários.", "search"),
+    ("!describe", "Descreve uma imagem.", "image")
 ]
 
 
@@ -58,7 +58,7 @@ async def is_message_too_old(timestamp: int, max_minutes: int = 20) -> bool:
 
 def clean_text(text: str) -> str:
     treated_text = text.strip()
-    for command, _ in COMMANDS:
+    for command, _, _ in COMMANDS:
         treated_text = treated_text.replace(command, "")
 
     treated_text = re.compile(r'@\d{6,15}').sub('', treated_text)
@@ -66,61 +66,58 @@ def clean_text(text: str) -> str:
 
 
 async def handle_help_command(remote_id: str, message_id: str):
-    help_message = (
-        "🤖 *COMANDOS DO GORK*\n"
-        "━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+    category_info = {
+        "interaction": ("💬 *INTERAÇÃO*", []),
+        "search": ("🔍 *BUSCA & INFORMAÇÃO*", []),
+        "audio": ("🎙️ *ÁUDIO & TRANSCRIÇÃO*", []),
+        "image": ("🖼️ *IMAGENS & STICKERS*", []),
+        "reminder": ("⏰ *LEMBRETES*", []),
+        "utility": ("📝 *UTILIDADES*", [])
+    }
 
-        "💬 *INTERAÇÃO*\n"
-        "*@Gork* - Interação genérica\n"
-        "_Menção necessária apenas em grupos_\n\n"
+    for cmd, desc, category in COMMANDS:
+        if category != "hidden" and desc:
+            category_info[category][1].append((cmd, desc))
 
-        "🔍 *BUSCA & INFORMAÇÃO*\n"
-        "*!search* - Pesquisa na internet\n"
-        "*!model* - Mostra modelos em uso\n"
-        "*!consumption* - Relatório de consumo\n\n"
+    help_parts = [
+        "🤖 *COMANDOS DO GORK*",
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━",
+        ""
+    ]
 
-        "🎙️ *ÁUDIO & TRANSCRIÇÃO*\n"
-        "*!audio* - Responde em áudio\n"
-        "_Adicione !english para voz em inglês_\n"
-        "*!transcribe* - Transcreve um áudio\n\n"
+    for category, (title, commands) in category_info.items():
+        if commands:
+            help_parts.append(title)
+            for cmd, desc in commands:
+                help_parts.append(f"*{cmd}* - {desc}")
+            help_parts.append("")
 
-        "🖼️ *IMAGENS & STICKERS*\n"
-        "*!image* - Gera ou modifica imagem\n"
-        "*!sticker* - Cria sticker\n"
-        "_Use | como separador top/bottom_\n\n"
-
-        "⏰ *LEMBRETES*\n"
-        "*!remember* - Cria lembretes\n"
-        "_Ex: Lembrete para amanhã às 16h_\n\n"
-
-        "📝 *UTILIDADES*\n"
-        "*!resume* - Resume últimas 30 mensagens\n"
-        "*!help* - Mostra esta mensagem\n\n"
-
-        "━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-
-        "💡 *DICA: FALE NATURALMENTE!*\n\n"
-
-        "Você não precisa usar comandos. Apenas converse normalmente:\n\n"
-
-        "• \"me avisa amanhã às 10h\"\n"
-        "  → _cria lembrete automaticamente_\n\n"
-
-        "• \"pesquisa sobre Python\"\n"
-        "  → _busca na internet_\n\n"
-
-        "• \"cria uma imagem de gato espacial\"\n"
-        "  → _gera a imagem_\n\n"
-
-        "• \"resume a conversa\"\n"
-        "  → _faz resumo do histórico_\n\n"
-
-        "Os comandos (!) são *opcionais*, mas mais rápidos, precisos e econômicos.\n\n"
-
-        "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+    help_parts.extend([
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━",
+        "",
+        "💡 *DICA: FALE NATURALMENTE!*",
+        "",
+        "Você não precisa usar comandos. Apenas converse normalmente:",
+        "",
+        "• \"me avisa amanhã às 10h\"",
+        "  → _cria lembrete automaticamente_",
+        "",
+        "• \"pesquisa sobre Python\"",
+        "  → _busca na internet_",
+        "",
+        "• \"cria uma imagem de gato espacial\"",
+        "  → _gera a imagem_",
+        "",
+        "• \"resume a conversa\"",
+        "  → _faz resumo do histórico_",
+        "",
+        "Os comandos (!) são *opcionais*, mas mais rápidos, precisos e econômicos.",
+        "",
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━",
         "🔗 Contribute: github.com/pedrohgoncalvess/gork"
-    )
+    ])
 
+    help_message = "\n".join(help_parts)
     await send_message(remote_id, help_message, message_id)
 
 
@@ -204,6 +201,18 @@ async def handle_sticker_command(
     await send_sticker(remote_id, webp_base64)
 
 
+async def handle_describe_image_command(
+        remote_id: str,
+        user_id: int,
+        treated_text: str,
+        body: dict,
+        group_id: Optional[int] = None
+):
+    resume = await describe_image(user_id, treated_text, body, group_id)
+    await send_message(remote_id, resume)
+    return
+
+
 async def handle_transcribe_command(
         remote_id: str,
         message_id: str,
@@ -262,7 +271,7 @@ async def handle_generic_conversation(
 
 
 def has_explicit_command(text: str) -> bool:
-    return any(cmd in text.lower() for cmd, _ in COMMANDS if cmd.startswith("!"))
+    return any(cmd in text.lower() for cmd, _, _ in COMMANDS if cmd.startswith("!"))
 
 def handle_media(body: dict) -> list[str]:
     event_data = body.get("data")
