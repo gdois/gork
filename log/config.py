@@ -26,6 +26,7 @@ import os
 from datetime import datetime
 from string import Template
 from functools import reduce
+from typing import Optional
 
 import aiofiles
 
@@ -34,7 +35,7 @@ from utils.path_config import project_root
 
 
 class StructuredLogger:  #TODO: Implement sync logging
-    def __init__(self, log_format: str | None = None):
+    def __init__(self, log_format: Optional[str] = None, file_name: Optional[str] = None):
         log_append_path = get_env_var("LOG_APPEND_PATH")
         log_path = get_env_var("LOG_PATH")
 
@@ -48,6 +49,7 @@ class StructuredLogger:  #TODO: Implement sync logging
 
         self._log_file_format_ = f".{re.sub(r'[^a-zA-Z0-9]', '', log_format)}.log" if log_format else ".log"
         self.partition_by = datetime.now().strftime("%Y_%m_%d")
+        self._file_name_ = f"{file_name}-{self.partition_by}" if file_name else self.partition_by
         self._log_path_ = f"{self._log_file_dir_}/{self.partition_by}{self._log_file_format_}"
         self._env_ = get_env_var("ENV") if get_env_var("ENV") is not None else "dev"
 
@@ -126,3 +128,4 @@ class StructuredLogger:  #TODO: Implement sync logging
 
 # Customize your log formats and files
 logger = StructuredLogger()
+openrouter_logger = StructuredLogger(file_name="openrouter")

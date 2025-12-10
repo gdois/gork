@@ -1,4 +1,1 @@
-from log.config import logger
-
-
-__all__ = ["logger"]
+from log.config import logger, openrouter_logger
