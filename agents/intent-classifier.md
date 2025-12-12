@@ -29,5 +29,3 @@ REGRAS:
 5. Se "Quote áudio" = Sim E usuário pede transcrição explicitamente: "transcribe"
 6. Se "Imagem anexada" = Sim E usuário pede análise/edição: considere contexto da mensagem
 7. Na dúvida: "conversation"
-
-Classificação:
