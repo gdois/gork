@@ -1,0 +1,64 @@
+def verifiy_media(body: dict) -> dict[str, str]:
+    event_data = body.get("data")
+    message_id = event_data["key"]["id"]
+    message_type = event_data["messageType"]
+
+    audio_message = True if message_type == "audioMessage" else False
+    image_message = True if message_type == "imageMessage" else False
+
+    context_info = event_data.get("contextInfo") if event_data.get("contextInfo") is not None else {}
+    if not context_info:
+        raw_context_info = (event_data.get("message", {})
+            .get("ephemeralMessage", {})
+            .get("message", {})
+            .get("extendedTextMessage", {})
+            .get("contextInfo")
+                        )
+        context_info = raw_context_info if raw_context_info else {}
+
+    quoted_id = context_info.get("stanzaId")
+
+    image_quote = context_info.get("quotedMessage", {}).get("imageMessage")
+    if not image_quote:
+        image_quote = (
+            context_info
+            .get("quotedMessage", {})
+            .get("ephemeralMessage", {})
+            .get("message", {})
+            .get("imageMessage")
+        )
+
+    text_quote = context_info.get("quotedMessage", {}).get("conversation")
+    if not text_quote:
+        text_quote = (
+            context_info
+            .get("quotedMessage", {})
+            .get("ephemeralMessage", {})
+            .get("message", {})
+            .get("extendedTextMessage", {})
+            .get("text")
+        )
+
+    audio_quote = context_info.get("quotedMessage", {}).get("audioMessage")
+    if not audio_quote:
+        audio_quote = (
+            context_info
+            .get("quotedMessage", {})
+            .get("ephemeralMessage", {})
+            .get("message", {})
+            .get("audioMessage")
+        )
+
+    medias = {}
+    if audio_quote:
+        medias.update({"audio_quote": quoted_id})
+    if image_quote:
+        medias.update({"image_quote": quoted_id})
+    if image_message:
+        medias.update({"image_message": message_id})
+    if audio_message:
+        medias.update({"audio_message": message_id})
+    if text_quote:
+        medias.update({"text_quote": (text_quote, quoted_id)})
+
+    return medias
