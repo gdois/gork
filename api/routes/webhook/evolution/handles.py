@@ -12,13 +12,14 @@ from database.operations.manager import ModelRepository
 from functions import (
     get_resume_conversation, generic_conversation,
     generate_sticker, remember_generator,
-    generate_image, describe_image,
+    generate_image,
     list_images, search_images
 )
 from functions.tokens import token_consumption
 from functions.transcribe_audio import transcribe_audio
 from functions.web_search import web_search
-from external.evolution import send_message, send_audio, send_sticker, send_image
+from external.evolution import send_message, send_audio, send_sticker, send_image, download_media
+from services import describe_image
 from services.remember import action_remember
 from tts import text_to_speech
 
@@ -32,6 +33,7 @@ COMMANDS = [
     ("!model", "Mostra o modelo sendo utilizado.", "search"),
     ("!sticker", "Cria um sticker com base em uma imagem e texto fornecido. _[Use | como separador de top/bottom]_", "image"),
     ("!english", "", "hidden"),
+    ("!random", "", "hidden"),
     ("!remember", "Cria um lembrete para o dia, hora e tópico solicitado. _[Ex: Lembrete para comentar amanhã as 4 da tarde]_", "reminder"),
     ("!transcribe", "Transcreve um áudio. _[Ignora o restante da mensagem]_", "audio"),
     ("!image", "Gera ou modifica uma imagem mencionada.", "image"),
@@ -200,9 +202,12 @@ async def handle_consumption_command(
 async def handle_sticker_command(
         remote_id: str,
         body: dict,
-        treated_text: str
+        treated_text: str,
+        message: str,
+        db: AsyncSession
 ):
-    webp_base64 = await generate_sticker(body, treated_text)
+    is_random = True if "!random" in message else False
+    webp_base64 = await generate_sticker(body, treated_text, db, is_random)
     await send_sticker(remote_id, webp_base64)
 
 
@@ -210,10 +215,15 @@ async def handle_describe_image_command(
         remote_id: str,
         user_id: int,
         treated_text: str,
-        body: dict,
+        medias: dict[str, str],
         group_id: Optional[int] = None
 ):
-    resume = await describe_image(user_id, treated_text, body, group_id)
+    if "image_message" in medias.keys():
+        image_base64, _ = await download_media(medias["image_message"])
+    else:
+        image_base64, _ = await download_media(medias["image_quote"])
+
+    resume = await describe_image(user_id, treated_text, image_base64, group_id)
     await send_message(remote_id, resume)
     return
 
@@ -257,12 +267,13 @@ async def handle_generic_conversation(
         message_id: str,
         user: User,
         treated_text: str,
+        context: dict[str, str],
         group_id: Optional[int] = None,
         audio: bool = False
 ):
 
     is_group = True if group_id else False
-    response_message = await generic_conversation(group_id, user.name, treated_text, user.id, is_group)
+    response_message = await generic_conversation(group_id, user.name, treated_text, user.id, context, is_group)
 
     if audio:
         audio_base64 = await text_to_speech(
@@ -270,61 +281,16 @@ async def handle_generic_conversation(
             language=response_message.get("language")
         )
         await send_audio(remote_id, audio_base64, message_id)
+        return
     else:
         response_text = f"{response_message.get('text')}"
         await send_message(remote_id, response_text, message_id)
+        return
 
 
 def has_explicit_command(text: str) -> bool:
     return any(cmd in text.lower() for cmd, _, _ in COMMANDS if cmd.startswith("!"))
 
-def handle_media(body: dict) -> list[str]:
-    event_data = body.get("data")
-
-    message_type = event_data.get("messageType")
-
-    audio_message = True if message_type == "audioMessage" else False
-    image_message = True if message_type == "imageMessage" else False
-
-    context_info = event_data.get("contextInfo") if event_data.get("contextInfo") is not None else {}
-    image_quote = context_info.get("quotedMessage", {}).get("imageMessage")
-    if not image_quote:
-        image_quote = (
-            event_data.get("message", {})
-            .get("ephemeralMessage", {})
-            .get("message", {})
-            .get("extendedTextMessage", {})
-            .get("contextInfo", {})
-            .get("quotedMessage", {})
-            .get("ephemeralMessage", {})
-            .get("message", {})
-            .get("imageMessage")
-        )
-
-    audio_quote = context_info.get("quotedMessage", {}).get("audioMessage")
-    if not audio_quote:
-        audio_quote = (
-            event_data.get("message", {})
-            .get("ephemeralMessage", {})
-            .get("message", {})
-            .get("extendedTextMessage", {})
-            .get("contextInfo", {})
-            .get("quotedMessage", {})
-            .get("ephemeralMessage", {})
-            .get("message", {})
-            .get("audioMessage")
-        )
-    medias = []
-    if audio_quote:
-        medias.append("audio_quote")
-    if image_quote:
-        medias.append("image_quote")
-    if image_message:
-        medias.append("image_message")
-    if audio_message:
-        medias.append("audio_message")
-
-    return medias
 
 async def handle_list_images_command(
         remote_id: str, treated_text: Optional[str],

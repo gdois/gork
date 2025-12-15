@@ -4,7 +4,7 @@ import asyncio
 
 from scheduler import scheduler
 from api.routes.webhook.evolution.services import process_webhook
-from log import logger
+from log import logger, other_webhooks_logger
 from utils import get_env_var
 
 
@@ -34,6 +34,7 @@ async def evolution_webhook(request: Request):
             detail="Invalid API key"
         )
 
+    await other_webhooks_logger.info("Webhook", "Evolution", body)
     asyncio.create_task(process_webhook(body, scheduler))
 
     return {"status": "received"}

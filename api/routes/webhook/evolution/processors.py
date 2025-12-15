@@ -4,12 +4,13 @@ from typing import Optional
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.routes.webhook.evolution.handles import is_message_too_old, extract_conversation_text, handle_media, \
-    handle_consumption_command, handle_describe_image_command, handle_list_images_command
 from api.routes.webhook.evolution.handles import (
     clean_text, has_explicit_command, handle_help_command,
-    handle_generic_conversation, handle_remember_command, handle_sticker_command, handle_image_command,
-    handle_search_command, handle_transcribe_command, handle_resume_command, handle_model_command, COMMANDS
+    handle_generic_conversation, handle_remember_command, handle_sticker_command,
+    handle_image_command, handle_search_command, handle_transcribe_command,
+    handle_resume_command, handle_model_command, COMMANDS,
+    is_message_too_old, extract_conversation_text,
+    handle_consumption_command, handle_describe_image_command, handle_list_images_command
 )
 from database.models.base import User, Group, WhiteList
 from database.models.content import Message
@@ -18,6 +19,7 @@ from database.operations.content import MessageRepository
 from external import get_group_info
 from external.evolution import send_message
 from functions import transcribe_audio, classify_intent
+from services import verifiy_media, save_profile_pic
 from utils import get_env_var
 
 
@@ -45,6 +47,8 @@ async def process_group_message(
     user_gork = await user_repo.find_by_name("Gork")
 
     user = await user_repo.find_or_create(name=contact_name, lid=contact_id)
+    _ = await save_profile_pic(user.id)
+
     group = await group_repo.find_or_create(group_jid=group_jid)
 
     if not group.name:
@@ -97,8 +101,8 @@ async def process_group_message(
     if not is_mention:
         return
 
-    medias = handle_media(body)
-    if "audio_message" in medias:
+    medias = verifiy_media(body)
+    if "audio_message" in medias.keys():
         conversation = await transcribe_audio(body, user.id, group.id)
 
     if conversation in [f"@{instance_number}", f"@{user_gork.src_id}"]:
@@ -138,6 +142,7 @@ async def process_private_message(
     whitelist_repo = WhiteListRepository(WhiteList, db)
 
     user = await user_repo.find_or_create(name=contact_name, lid=remote_id, phone_number=number)
+    _ = await save_profile_pic(user.id)
 
     is_whitelisted = await whitelist_repo.is_whitelisted(
         sender_type="user",
@@ -162,13 +167,15 @@ async def process_private_message(
         )
         return
 
-    medias = handle_media(body)
-    if "audio_message" in medias:
+    medias = verifiy_media(body)
+    if "audio_message" in medias.keys():
         conversation = await transcribe_audio(body, user.id, group_id=None)
 
     if "!status" in conversation:
         await send_message(number, "🤖 Robo do mito está pronto", message_id)
         return
+
+    print(conversation)
 
     await process_commands(
         conversation,
@@ -192,7 +199,8 @@ async def process_explicit_commands(
         group_id: Optional[int],
         treated_text: str,
         db: AsyncSession,
-        scheduler: AsyncIOScheduler
+        scheduler: AsyncIOScheduler,
+        context: dict[str, str]
 ):
     if "!help" in conversation.lower():
         await handle_help_command(remote_id, message_id)
@@ -224,7 +232,7 @@ async def process_explicit_commands(
         return
 
     if "!sticker" in conversation.lower():
-        await handle_sticker_command(remote_id, body, treated_text)
+        await handle_sticker_command(remote_id, body, treated_text, conversation, db)
         return
 
     if "!remember" in conversation.lower():
@@ -258,7 +266,7 @@ async def process_explicit_commands(
         return
 
     await handle_generic_conversation(
-        remote_id, message_id, user, treated_text, group_id
+        remote_id, message_id, user, treated_text, context, group_id
     )
 
 
@@ -271,7 +279,7 @@ async def process_commands(
         group_id: Optional[int],
         db: AsyncSession,
         scheduler: AsyncIOScheduler,
-        medias: list[str]
+        medias: dict[str, str]
 ):
     treated_text = clean_text(conversation)
 
@@ -280,7 +288,7 @@ async def process_commands(
     if has_explicit:
         await process_explicit_commands(
             conversation, remote_id, message_id, user,
-            body, group_id, treated_text, db, scheduler
+            body, group_id, treated_text, db, scheduler, medias
         )
     else:
         await process_intent_based_commands(
@@ -299,7 +307,7 @@ async def process_intent_based_commands(
         treated_text: str,
         db: AsyncSession,
         scheduler: AsyncIOScheduler,
-        medias: list[str]
+        medias: dict[str, str]
 ):
     intent, wants_audio = await classify_intent(conversation, db, COMMANDS, medias, user.id, group_id)
     is_group = True if group_id else False
@@ -311,7 +319,7 @@ async def process_intent_based_commands(
         "transcribe": lambda: handle_transcribe_command(remote_id, message_id, body, user.id, group_id),
         "search": lambda: handle_search_command(remote_id, message_id, treated_text, is_group, user.id),
         "image": lambda: handle_image_command(remote_id, user.id, treated_text, body, group_id),
-        "sticker": lambda: handle_sticker_command(remote_id, body, treated_text),
+        "sticker": lambda: handle_sticker_command(remote_id, body, treated_text, conversation, db),
         "remember": lambda: handle_remember_command(scheduler, remote_id, message_id, user.id, treated_text, group_id),
     }
 
@@ -321,5 +329,5 @@ async def process_intent_based_commands(
         await handler()
     else:
         await handle_generic_conversation(
-            remote_id, message_id, user, treated_text, group_id, wants_audio
+            remote_id, message_id, user, treated_text, medias, group_id, wants_audio
         )
