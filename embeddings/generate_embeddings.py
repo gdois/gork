@@ -8,10 +8,8 @@ from transformers import CLIPModel, CLIPProcessor
 from log import openrouter_logger
 
 
-# model = CLIPModel.from_pretrained("laion/CLIP-ViT-bigG-14-laion2B-39B-b160k") #1024
-# processor = CLIPProcessor.from_pretrained("laion/CLIP-ViT-bigG-14-laion2B-39B-b160k")
-model = CLIPModel.from_pretrained("laion/CLIP-ViT-H-14-laion2B-s32B-b79K") #1024
-processor = CLIPProcessor.from_pretrained("laion/CLIP-ViT-H-14-laion2B-s32B-b79K")
+model = CLIPModel.from_pretrained("laion/CLIP-ViT-bigG-14-laion2B-39B-b160k")
+processor = CLIPProcessor.from_pretrained("laion/CLIP-ViT-bigG-14-laion2B-39B-b160k")
 model.eval()
 
 async def generate_text_embeddings(text: str) -> list[float]:
