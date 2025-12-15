@@ -5,10 +5,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from services import manage_interaction
 
 
-async def classify_intent(message: str, db: AsyncSession, commands: list[tuple[str, str]], medias: list[str], user_id: int, group_id: Optional[int]) -> tuple[str, bool]:
+async def classify_intent(message: str, db: AsyncSession, commands: list[tuple[str, str]], medias: dict[str, str], user_id: int, group_id: Optional[int]) -> tuple[str, bool]:
     if any(cmd in message.lower() for cmd, _, _ in commands if cmd.startswith("!")):
         return "explicit_command", False
 
+    medias = medias.keys()
     has_audio = "Sim" if "audio_message" in medias else "Não"
     has_image = "Sim" if "image_message" in medias else "Não"
     has_audio_quote = "Sim" if "audio_quote" in medias else "Não"
