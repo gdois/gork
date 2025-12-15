@@ -9,16 +9,12 @@ from database.operations import BaseRepository
 
 
 class MediaRepository(BaseRepository[Media]):
-
-    # ==================== BUSCA SIMPLES ====================
-
     async def find_by_user(
             self,
             user_id: int,
             limit: int = 50,
             inserted_at: Optional[datetime] = None
     ) -> List[dict]:
-        """Busca simples de mídias por usuário"""
         if not inserted_at:
             inserted_at = datetime.now() - timedelta(days=1)
 
@@ -57,7 +53,6 @@ class MediaRepository(BaseRepository[Media]):
             limit: int = 50,
             inserted_at: Optional[datetime] = None
     ) -> List[dict]:
-        """Busca simples de mídias por grupo"""
         if not inserted_at:
             inserted_at = datetime.now() - timedelta(days=1)
 
@@ -99,28 +94,28 @@ class MediaRepository(BaseRepository[Media]):
     ) -> List[dict]:
         embedding_str = f"'[{','.join(map(str, query_embedding))}]'"
 
-        # Usa a MENOR distância (melhor match) entre name e image
         query = text(f"""
             SELECT 
                 content.media.id,
                 content.media.ext_id,
                 content.media.name,
+                content.media.description,
                 content.media.size,
                 content.media.inserted_at,
                 content.media.format,
                 content.media.path,
                 content.media.bucket,
                 base."user".name as user_name,
-                content.media.name_embedding <=> {embedding_str}::vector as name_distance,
+                content.media.description_embedding <=> {embedding_str}::vector as desc_distance,
                 content.media.image_embedding <=> {embedding_str}::vector as image_distance,
-                1 - (content.media.name_embedding <=> {embedding_str}::vector) as name_similarity,
+                1 - (content.media.description_embedding <=> {embedding_str}::vector) as desc_similarity,
                 1 - (content.media.image_embedding <=> {embedding_str}::vector) as image_similarity,
                 LEAST(
-                    content.media.name_embedding <=> {embedding_str}::vector,
+                    content.media.description_embedding <=> {embedding_str}::vector,
                     content.media.image_embedding <=> {embedding_str}::vector
                 ) as best_distance,
                 GREATEST(
-                    1 - (content.media.name_embedding <=> {embedding_str}::vector),
+                    1 - (content.media.description_embedding <=> {embedding_str}::vector),
                     1 - (content.media.image_embedding <=> {embedding_str}::vector)
                 ) as best_similarity
             FROM content.media
@@ -150,14 +145,14 @@ class MediaRepository(BaseRepository[Media]):
                 "path": row.path,
                 "bucket": row.bucket,
                 "user_name": row.user_name,
-                "name_similarity": float(row.name_similarity),
+                "desc_similarity": float(row.desc_similarity),
                 "image_similarity": float(row.image_similarity),
                 "best_similarity": float(row.best_similarity),
                 "best_distance": float(row.best_distance),
-                "matched_by": "name" if row.name_similarity > row.image_similarity else "image"
+                "matched_by": "name" if row.desc_similarity > row.image_similarity else "image"
             }
             for row in rows
-            if float(row.name_similarity) >= min_similarity or float(row.image_similarity) >= min_similarity
+            if float(row.desc_similarity) >= min_similarity or float(row.image_similarity) >= min_similarity
         ]
 
     async def semantic_search_by_group(
@@ -167,14 +162,11 @@ class MediaRepository(BaseRepository[Media]):
             limit: int = 10,
             min_similarity: float = 0.5
     ) -> List[dict]:
-        """
-        Busca semântica de imagens por grupo usando embeddings
-        """
         result = await self.db.execute(
             select(
                 Media,
                 User.name.label('user_name'),
-                Media.name_embedding.cosine_distance(query_embedding).label('distance')
+                Media.description_embedding.cosine_distance(query_embedding).label('distance')
             )
             .join(Message, Media.message_id == Message.id)
             .join(User, Message.user_id == User.id)
@@ -182,7 +174,7 @@ class MediaRepository(BaseRepository[Media]):
                 and_(
                     Message.group_id == group_id,
                     Media.deleted_at.is_(None),
-                    Media.name_embedding.is_not(None)
+                    Media.description_embedding.is_not(None)
                 )
             )
             .order_by('distance')
