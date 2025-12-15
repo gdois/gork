@@ -1,6 +1,6 @@
 from sqlalchemy import (
     Column, Integer, String, DECIMAL, ForeignKey,
-    TIMESTAMP, func, text, UUID
+    TIMESTAMP, func, text, UUID, Text
 )
 from pgvector.sqlalchemy import Vector
 
@@ -15,9 +15,10 @@ class Media(Base):
     ext_id = Column(UUID, unique=True, nullable=False, server_default=text("uuid_generate_v4()"))
 
     name = Column(String(150), nullable=False)
+    description = Column(Text, nullable=False)
     message_id = Column(Integer, ForeignKey("content.message.id"), nullable=True)
-    image_embedding = Column(Vector(1024), nullable=False)
-    name_embedding = Column(Vector(1024), nullable=False)
+    image_embedding = Column(Vector(1280), nullable=False)
+    description_embedding = Column(Vector(1280), nullable=False)
 
     bucket = Column(String(30), nullable=False)
     path = Column(String(200), nullable=False)
