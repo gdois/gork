@@ -1,18 +1,8 @@
-import textwrap
-
 from PIL import ImageFont, ImageDraw, Image
-
 from utils import project_root
 
 
 def add_caption_to_image(img: Image.Image, caption_text: str = "") -> Image.Image:
-    """
-    Add meme-style text to image with automatic top/bottom split.
-
-    Args:
-        img: PIL Image
-        caption_text: Caption text (use '|' to split top/bottom, or auto-split by length)
-    """
     if not caption_text:
         return img
 
@@ -26,7 +16,6 @@ def add_caption_to_image(img: Image.Image, caption_text: str = "") -> Image.Imag
     else:
         words = caption_text.strip().split()
         total_words = len(words)
-
         if total_words <= 3:
             bottom_text = caption_text
         elif total_words <= 6:
@@ -42,56 +31,63 @@ def add_caption_to_image(img: Image.Image, caption_text: str = "") -> Image.Imag
     width, height = img.size
     draw = ImageDraw.Draw(img)
 
-    font_size = int(height / 8)
-    font_size = max(30, min(font_size, 100))
-
-    font = ImageFont.truetype(f"{project_root}/data/fonts/arial-bold.ttf", font_size)
-
     if top_text:
-        draw_meme_text(draw, top_text.upper(), font, width, height, position="top")
+        draw_meme_text(draw, top_text.upper(), width, height, position="top")
 
     if bottom_text:
-        draw_meme_text(draw, bottom_text.upper(), font, width, height, position="bottom")
+        draw_meme_text(draw, bottom_text.upper(), width, height, position="bottom")
 
     return img
 
 
-def draw_meme_text(draw, text: str, font, width: int, height: int, position: str = "top"):
-    max_chars = max(12, width // (font.size // 2))
-    lines = textwrap.wrap(text, width=max_chars)
+def draw_meme_text(draw, text: str, width: int, height: int, position: str = "top"):
+    margin_x = int(width * 0.05)
+    usable_width = width - (2 * margin_x)
 
-    if len(lines) == 1 and len(text) > max_chars:
-        words = text.split()
-        lines = []
-        current_line = []
+    font_size = int(height / 8)
+    font_size = max(30, min(font_size, 120))
 
-        for word in words:
-            test_line = ' '.join(current_line + [word])
-            bbox = draw.textbbox((0, 0), test_line, font=font)
-            if bbox[2] - bbox[0] < width - 40:
-                current_line.append(word)
-            else:
-                if current_line:
-                    lines.append(' '.join(current_line))
-                current_line = [word]
+    best_font = None
+    best_lines = []
 
-        if current_line:
-            lines.append(' '.join(current_line))
+    for size in range(font_size, 20, -5):
+        try:
+            font = ImageFont.truetype(f"{project_root}/data/fonts/arial-bold.ttf", size)
+        except:
+            font = ImageFont.load_default()
 
-    line_height = int(font.size * 1.2)
+        lines = wrap_text_to_width(draw, text, font, usable_width)
+
+        line_height = int(size * 1.2)
+        total_text_height = len(lines) * line_height
+
+        max_text_height = (height // 2) - 40
+
+        if total_text_height <= max_text_height:
+            best_font = font
+            best_lines = lines
+            break
+    if best_font is None:
+        try:
+            best_font = ImageFont.truetype(f"{project_root}/data/fonts/arial-bold.ttf", 25)
+        except:
+            best_font = ImageFont.load_default()
+        best_lines = wrap_text_to_width(draw, text, best_font, usable_width)
+
+    line_height = int(best_font.size * 1.2)
+    total_height = len(best_lines) * line_height
 
     if position == "top":
-        y = 10
+        y = 20
     else:
-        total_height = len(lines) * line_height
-        y = height - total_height - 10
+        y = height - total_height - 20
 
-    for line in lines:
-        bbox = draw.textbbox((0, 0), line, font=font)
+    outline_width = max(2, best_font.size // 15)
+
+    for line in best_lines:
+        bbox = draw.textbbox((0, 0), line, font=best_font)
         text_width = bbox[2] - bbox[0]
         x = (width - text_width) // 2
-
-        outline_width = max(2, font.size // 15)
 
         for offset_x in range(-outline_width, outline_width + 1):
             for offset_y in range(-outline_width, outline_width + 1):
@@ -99,10 +95,34 @@ def draw_meme_text(draw, text: str, font, width: int, height: int, position: str
                     draw.text(
                         (x + offset_x, y + offset_y),
                         line,
-                        font=font,
+                        font=best_font,
                         fill=(0, 0, 0, 255)
                     )
 
-        draw.text((x, y), line, font=font, fill=(255, 255, 255, 255))
-
+        draw.text((x, y), line, font=best_font, fill=(255, 255, 255, 255))
         y += line_height
+
+
+def wrap_text_to_width(draw, text: str, font, max_width: int) -> list:
+    words = text.split()
+    lines = []
+    current_line = []
+
+    for word in words:
+        test_line = ' '.join(current_line + [word])
+        bbox = draw.textbbox((0, 0), test_line, font=font)
+        text_width = bbox[2] - bbox[0]
+
+        if text_width <= max_width:
+            current_line.append(word)
+        else:
+            if current_line:
+                lines.append(' '.join(current_line))
+                current_line = [word]
+            else:
+                lines.append(word)
+
+    if current_line:
+        lines.append(' '.join(current_line))
+
+    return lines if lines else [text]
