@@ -1,23 +1,47 @@
 import asyncio
 import base64
+import re
 from io import BytesIO
 
 from PIL import Image
 
 from database import PgConnection
+from database.models.base import User
 from database.models.manager import Model, Interaction, Command
+from database.operations.base import UserRepository
 from database.operations.manager import (
     ModelRepository, InteractionRepository, CommandRepository
 )
 from external import make_request_openrouter
 from external.evolution import download_media
+from s3 import S3Client
+from services import verifiy_media
 from services.save_image import save_image
 
 
-async def generate_image(user_id: int, user_message: str, webhook_event: dict, group_id: int = None) -> tuple[str, bool]:
+async def generate_image(
+        user_id: int, user_message: str,
+        webhook_event: dict, group_id: int = None
+) -> tuple[str, bool]:
+    message_context = verifiy_media(webhook_event)
     event_data = webhook_event["data"]
     message_id = event_data["key"]["id"]
+    user_message = re.sub(r'!\w{3,}', '', user_message)
+
+    mention_photo: list[tuple[str, User]] = []
     async with PgConnection() as db:
+        mentions = message_context.get("mentions")
+        s3_client = S3Client()
+        await s3_client.connect()
+        if mentions is not None:
+            user_repo = UserRepository(User, db)
+            for mention in mentions:
+                user_mentioned = await user_repo.find_by_phone_or_id(mention)
+                if user_mentioned.name != "Gork":
+                    if user_mentioned is not None and user_mentioned.profile_pic_path is not None:
+                        photo_base64 = await s3_client.get_image_base64("whatsapp", user_mentioned.profile_pic_path)
+                        mention_photo.append((photo_base64, user_mentioned))
+
         model_repo = ModelRepository(Model, db)
         command_repo = CommandRepository(Command, db)
         new_command = await command_repo.create_command(
@@ -51,6 +75,13 @@ async def generate_image(user_id: int, user_message: str, webhook_event: dict, g
         else:
             image_base64 = None
 
+        photo_context = ""
+        if mention_photo:
+            for idx, (_, us) in enumerate(mention_photo, start=2):
+                user_message = user_message.replace(f"@{us.phone_number}@s.whatsapp.net", us.name).replace(f"{us.src_id}@lid", us.name)
+                photo_context = f"{photo_context}Foto [{idx}]:É a pessoa: {us.name}\n"
+
+        user_message = user_message if not photo_context else f"{photo_context}\n\n{user_message}"
         messages_content = [
             {
                 "type": "text",
@@ -68,6 +99,18 @@ async def generate_image(user_id: int, user_message: str, webhook_event: dict, g
                     }
                 }
             )
+
+        if mention_photo:
+            for photo, _ in mention_photo:
+                data_url = f"data:image/jpeg;base64,{photo}"
+                messages_content.append(
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": data_url
+                        }
+                    }
+                )
 
         messages = [
             {
