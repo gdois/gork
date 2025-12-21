@@ -1,7 +1,7 @@
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 
 
-def translate_to_pt(text: str, src_lang: str = "eng_Latn") -> str:
+def translate_to_pt(text: str, src_lang: str = "eng_Latn") -> str: # TODO: Translate with OpenRouter
     model_name = "facebook/nllb-200-distilled-1.3B"
 
     tokenizer = AutoTokenizer.from_pretrained(model_name, src_lang=src_lang)
