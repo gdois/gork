@@ -340,7 +340,7 @@ async def handle_list_favorites_message(
         last_days=last_days,
         group_id=group_id,
         user_name=user_name,
-        user_id=user_id
+        user_id=user_id if not group_id else None
     )
 
     if not favorites:
@@ -399,7 +399,7 @@ async def handle_remove_favorite(
 
     message = await message_repo.find_by_message_id(message_id)
 
-    if not message or message.group_id != group_id or message.user_id != user_id:
+    if not message or (message.group_id != group_id and message.user_id != user_id):
         message = "Não foi encontrada nenhuma mensagem favoritada."
         await send_message(remote_id, message)
         return

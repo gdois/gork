@@ -275,7 +275,7 @@ async def process_explicit_commands(
 
         if "!remove" in lw_conversation:
             await handle_remove_favorite(
-                remote_id, db, conversation, user.id, group_id
+                remote_id, db, conversation, user.id if not group_id else None, group_id
             )
             return
 
