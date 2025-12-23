@@ -149,7 +149,8 @@ async def save_image(
             Media(
                 ext_id=image_id, name=name, message_id=message.id,
                 bucket="whatsapp", path=path, format="png",
-                description_embedding=text_emb, description=description
+                description_embedding=text_emb, description=description,
+                size=len(decoded) / (1024 * 1024)
             )
         )
 
