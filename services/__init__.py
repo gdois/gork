@@ -4,3 +4,4 @@ from services.translator import translate_to_pt
 from services.save_image import save_image, describe_image
 from services.message_context import verifiy_media
 from services.save_profile_pic import save_profile_pic
+from services.params import parse_params
