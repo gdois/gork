@@ -32,7 +32,7 @@ def verifiy_media(body: dict) -> dict[str, str]:
 
     video_quote = context_info.get("quotedMessage", {}).get("videoMessage")
     if not video_quote:
-        image_quote = (
+        video_quote = (
             context_info
             .get("quotedMessage", {})
             .get("ephemeralMessage", {})
@@ -56,6 +56,8 @@ def verifiy_media(body: dict) -> dict[str, str]:
         )
         if not conversation:
             conversation = event_data["message"].get("videoMessage", {}).get("caption", "")
+        if not conversation:
+            conversation = event_data["message"].get("imageMessage", {}).get("caption", "")
 
     text_quote = context_info.get("quotedMessage", {}).get("conversation")
     if not text_quote:
