@@ -6,7 +6,7 @@ from services import manage_interaction
 
 
 async def classify_intent(message: str, db: AsyncSession, commands: list[tuple[str, str]], medias: dict[str, str], user_id: int, group_id: Optional[int]) -> tuple[str, bool]:
-    if any(cmd in message.lower() for cmd, _, _ in commands if cmd.startswith("!")):
+    if any(cmd in message.lower() for cmd, _, _, _ in commands if cmd.startswith("!")):
         return "explicit_command", False
 
     medias = medias.keys()

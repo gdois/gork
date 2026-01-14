@@ -13,9 +13,9 @@ from database.operations.content import MessageRepository
 from database.operations.manager import ModelRepository
 from functions import (
     get_resume_conversation, generic_conversation,
-    generate_sticker, remember_generator,
+    static, animated, remember_generator,
     generate_image,
-    list_images, search_images, generate_animated_sticker
+    list_images, search_images
 )
 from functions.tokens import token_consumption
 from functions.transcribe_audio import transcribe_audio
@@ -27,25 +27,32 @@ from tts import text_to_speech
 
 
 COMMANDS = [
-    ("@Gork", "Interação genérica. _[Menção necessária apenas quando em grupos]_", "interaction"),
-    ("!help", "Mostra os comandos disponíveis. _[Ignora o restante da mensagem]_", "utility"),
-    ("!audio", "Envia áudio como forma de resposta. _[Adicione !english para voz em inglês]_", "audio"),
-    ("!resume", "Faz um resumo das últimas 30 mensagens. _[Ignora o restante da mensagem]_", "utility"),
-    ("!search", "Faz uma pesquisa por termo na internet e retorna um resumo.", "search"),
-    ("!model", "Mostra o modelo sendo utilizado.", "search"),
-    ("!sticker", "Cria um sticker com base em uma imagem e texto fornecido. _[Use | como separador de top/bottom]_ \n_(Obs: Mensagens quotadas com !sticker será criado um sticker da mensagem com a foto de perfil de quem enviou, comando !random pega uma imagem aleatória)_", "image"),
-    ("!english", "", "hidden"),
-    ("!remember", "Cria um lembrete para o dia, hora e tópico solicitado. _[Ex: Lembrete para comentar amanhã as 4 da tarde]_", "reminder"),
-    ("!transcribe", "Transcreve um áudio. _[Ignora o restante da mensagem]_", "audio"),
-    ("!image", "Gera ou modifica uma imagem mencionada. _[Mencione alguém para adicionar a foto de perfil ao contexto de criação. Adicione @me na mensagem e sua foto vai ser mencionada no contexto.]_", "image"),
-    ("!consumption", "Gera relatório de consumo de grupos e usuários.", "search"),
-    ("!describe", "Descreve uma imagem.", "image"),
-    ("!gallery", "Lista as imagens enviadas. _[Filtros podem ser feitos com termos ou datas]_", "image"),
-    ("!favorite", "Favorita uma mensagem.", "utility"),
-    ("!list", "", "hidden"),
-    ("!remove", "", "hidden"),
-    (":no-background", "", "hidden"),
-    (":random", "", "hidden")
+    ("@Gork", "Interação genérica. _[Menção necessária apenas quando em grupos]_", "interaction", []),
+    ("!help", "Mostra os comandos disponíveis. _[Ignora o restante da mensagem]_", "utility", []),
+    ("!audio", "Envia áudio como forma de resposta. _[Adicione !english para voz em inglês]_", "audio", []),
+    ("!resume", "Faz um resumo das últimas 30 mensagens. _[Ignora o restante da mensagem]_", "utility", []),
+    ("!search", "Faz uma pesquisa por termo na internet e retorna um resumo.", "search", []),
+    ("!model", "Mostra o modelo sendo utilizado.", "search", []),
+    (
+        "!sticker",
+        "Cria um sticker com base em uma imagem e texto fornecido. _[Use | como separador de top/bottom]_ \n_(Obs: Mensagens quotadas com !sticker será criado um sticker da mensagem com a foto de perfil de quem enviou)_",
+        "image",
+        [
+            (":no-background", "Remove fundo da imagem",[("t", "Verdadeiro"), ("f", "Falso")]),
+            (":random", "Usa uma imagem aleatória",[("t", "Verdadeiro"), ("f", "Falso")]),
+            (":effect", "Adiciona um efeito. *Apenas figurinha animadas",[("explosion", "Explosão"), ("f", "Falso")]),
+        ]
+    ),
+    ("!english", "", "hidden", []),
+    ("!remember", "Cria um lembrete para o dia, hora e tópico solicitado. _[Ex: Lembrete para comentar amanhã as 4 da tarde]_", "reminder", []),
+    ("!transcribe", "Transcreve um áudio. _[Ignora o restante da mensagem]_", "audio", []),
+    ("!image", "Gera ou modifica uma imagem mencionada. _[Mencione alguém para adicionar a foto de perfil ao contexto de criação. Adicione @me na mensagem e sua foto vai ser mencionada no contexto.]_", "image", []),
+    ("!consumption", "Gera relatório de consumo de grupos e usuários.", "search", []),
+    ("!describe", "Descreve uma imagem.", "image", []),
+    ("!gallery", "Lista as imagens enviadas. _[Filtros podem ser feitos com termos ou datas]_", "image", []),
+    ("!favorite", "Favorita uma mensagem.", "utility", []),
+    ("!list", "", "hidden", []),
+    ("!remove", "", "hidden", []),
 ]
 
 
@@ -56,10 +63,11 @@ async def is_message_too_old(timestamp: int, max_minutes: int = 20) -> bool:
 
 def clean_text(text: str) -> str:
     treated_text = text.strip()
-    for command, _, _ in COMMANDS:
+    for command, _, _, _ in COMMANDS:
         treated_text = treated_text.replace(command, "")
 
     treated_text = re.compile(r'@\d{6,15}').sub('', treated_text)
+    treated_text = re.compile(r'\s*:[a-zA-Z-]+=\S+').sub('', treated_text)
     return treated_text.strip()
 
 
@@ -73,9 +81,9 @@ async def handle_help_command(remote_id: str, message_id: str):
         "utility": ("📝 *UTILIDADES*", [])
     }
 
-    for cmd, desc, category in COMMANDS:
+    for cmd, desc, category, params in COMMANDS:
         if category != "hidden" and desc:
-            category_info[category][1].append((cmd, desc))
+            category_info[category][1].append((cmd, desc, params))
 
     help_parts = [
         "🤖 *COMANDOS DO GORK*",
@@ -86,8 +94,17 @@ async def handle_help_command(remote_id: str, message_id: str):
     for category, (title, commands) in category_info.items():
         if commands:
             help_parts.append(title)
-            for cmd, desc in commands:
+            for cmd, desc, params in commands:
                 help_parts.append(f"*{cmd}* - {desc}")
+
+                if params:
+                    help_parts.append("  _Parâmetros:_")
+                    for param_name, param_desc, param_options in params:
+                        help_parts.append(f"  • *{param_name}* - {param_desc}")
+                        if param_options:
+                            options_str = ", ".join([f"`{opt}` ({desc})" for opt, desc in param_options])
+                            help_parts.append(f"    Opções: {options_str}")
+
             help_parts.append("")
 
     help_parts.extend([
@@ -201,14 +218,14 @@ async def handle_sticker_command(
     medias = message_context.keys()
     params = parse_params(message)
     if "video_message" in medias or "video_quote" in medias:
+        effect = params.get("effect")
         message_id = message_context.get("video_quote") if "video_quote" in medias else message_context.get("video_message")
-        gif_url = await generate_animated_sticker(message_id, treated_text)
-        print(gif_url)
+        gif_url = await animated(message_id, treated_text, effect)
         await send_animated_sticker(remote_id, gif_url)
     else:
         is_random = True if params.get("random", "f") == "t" else False
         remove_background = True if params.get("no-background", "f") == "t" else False
-        webp_base64 = await generate_sticker(
+        webp_base64 = await static(
             body, treated_text, db,
             message_context, is_random, remove_background
         )
@@ -293,7 +310,7 @@ async def handle_generic_conversation(
 
 
 def has_explicit_command(text: str) -> bool:
-    return any(cmd in text.lower() for cmd, _, _ in COMMANDS if cmd.startswith("!"))
+    return any(cmd in text.lower() for cmd, _, _, _ in COMMANDS if cmd.startswith("!"))
 
 
 async def handle_list_images_command(

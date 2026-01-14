@@ -2,7 +2,7 @@ import re
 
 
 def parse_params(message: str) -> dict:
-    PARAMS = ["id", "no-background", "random"]
+    PARAMS = ["id", "no-background", "random", "effect"]
     keys_pattern = "|".join(map(re.escape, PARAMS))
 
     pattern = rf':({keys_pattern})=([^\s]+)'
