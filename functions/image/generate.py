@@ -57,7 +57,7 @@ async def generate_image(
 
         message_data = event_data["message"]
 
-        context_info = event_data.get("contextInfo", {}) if event_data.get("contextInfo") is not None else {}
+        context_info = event_data.get("contextInfo", {}) if event_data.get("contextInfo") is not None else {} # TODO: Change for message_context
         quoted_message_id = context_info.get("stanzaId")
         if not quoted_message_id:
             quoted_message_id = (
@@ -123,7 +123,7 @@ async def generate_image(
         payload = {
             "model": default_image_model.openrouter_id,
             "messages": messages
-            }
+        }
 
         req = await completions(payload)
 
