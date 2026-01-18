@@ -16,14 +16,15 @@ async def completions(payload: dict) -> dict:
     }
 
     with httpx.Client(timeout=120) as client:
+        duration = datetime.now() - start
         try:
             response = client.post(f"{OPENROUTER_ENDPOINT}/chat/completions", json=payload, headers=headers)
             response.raise_for_status()
-            duration = datetime.now() - start
             minutes = duration.total_seconds() / 60
-            await openrouter_logger.info("OpenRouter", "Conversation", f"Model: {payload.get('model')} - Time took: {minutes:.2f}")
+            await openrouter_logger.info("OpenRouter", "Conversation", f"Model: {payload.get('model')} - Time took: {minutes:.2f}. Payload: {payload}")
             return response.json()
         except Exception as error:
+            minutes = duration.total_seconds() / 60
             await openrouter_logger.info(
                 "OpenRouter",
                 "Conversation",
