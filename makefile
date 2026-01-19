@@ -1,7 +1,9 @@
-PYTHON_PATH ?= C:\Users\pedro\AppData\Local\Programs\Python\Python313\python.exe
+PYTHON_PATH ?=
 VENV = .venv
 UV_INSTALLER = uv-installer-latest.exe
 UV_DOWNLOAD_URL = https://github.com/astral-sh/uv/releases/latest/download/uv-x86_64-pc-windows-msvc.exe
+EVOLUTION_ZIP = external-services/evolution-api-2.3.6.zip
+EVOLUTION_DIR = external-services/evolution-api-2.3.6/
 
 ifeq ($(OS),Windows_NT)
     RM = rmdir /s /q
@@ -11,6 +13,10 @@ ifeq ($(OS),Windows_NT)
     UV = uv.exe
     NULL_OUTPUT = >nul 2>&1
     WHICH = where
+    UNZIP_CMD = tar -xf
+    DOCKER_COMPOSE = docker compose
+    EVOLUTION_ZIP_WIN = external-services\evolution-api-2.3.6.zip
+    EVOLUTION_DIR_WIN = external-services\evolution-api-2.3.6
 else
     RM = rm -rf
     PYTHON_DEFAULT = python3
@@ -19,6 +25,10 @@ else
     UV ?= $(HOME)/.local/bin/uv
     NULL_OUTPUT = >/dev/null 2>&1
     WHICH = which
+    UNZIP_CMD = unzip -q
+    DOCKER_COMPOSE = docker compose
+    EVOLUTION_ZIP_WIN = $(EVOLUTION_ZIP)
+    EVOLUTION_DIR_WIN = $(EVOLUTION_DIR)
 endif
 
 .PHONY: setup run clean check-uv install-uv check-python create-venv install-deps
@@ -132,3 +142,66 @@ else
 	@rm -rf $(VENV)
 endif
 	@echo Virtual environment removed!
+
+
+evolution-setup:
+	@echo "Setting up Evolution API..."
+ifeq ($(OS),Windows_NT)
+	@if not exist "$(EVOLUTION_ZIP_WIN)" ( \
+		echo ERROR: $(EVOLUTION_ZIP) not found! && exit /b 1 \
+	)
+	@if exist "$(EVOLUTION_DIR_WIN)" $(RM) "$(EVOLUTION_DIR_WIN)"
+	@echo Extracting $(EVOLUTION_ZIP)...
+	@powershell -Command "Expand-Archive -Path '$(EVOLUTION_ZIP)' -DestinationPath 'external-services' -Force"
+else
+	@if [ ! -f $(EVOLUTION_ZIP) ]; then \
+		echo "ERROR: $(EVOLUTION_ZIP) not found!"; \
+		exit 1; \
+	fi
+	@if [ -d $(EVOLUTION_DIR) ]; then $(RM) $(EVOLUTION_DIR); fi
+	@echo "Extracting $(EVOLUTION_ZIP)..."
+	@$(UNZIP_CMD) $(EVOLUTION_ZIP) -d external-services
+endif
+	@echo "Evolution API extracted successfully!"
+
+evolution-start: evolution-setup
+	@echo "Starting Evolution API with Docker Compose..."
+ifeq ($(OS),Windows_NT)
+	@cd $(EVOLUTION_DIR) && $(DOCKER_COMPOSE) up -d
+else
+	@cd $(EVOLUTION_DIR) && $(DOCKER_COMPOSE) up -d
+endif
+	@echo "Evolution API started successfully!"
+
+evolution-stop:
+	@echo "Stopping Evolution API..."
+ifeq ($(OS),Windows_NT)
+	@if exist $(EVOLUTION_DIR) ( \
+		cd $(EVOLUTION_DIR) && $(DOCKER_COMPOSE) down \
+	) else ( \
+		echo ERROR: $(EVOLUTION_DIR) not found! && exit /b 1 \
+	)
+else
+	@if [ -d $(EVOLUTION_DIR) ]; then \
+		cd $(EVOLUTION_DIR) && $(DOCKER_COMPOSE) down; \
+	else \
+		echo "ERROR: $(EVOLUTION_DIR) not found!"; \
+		exit 1; \
+	fi
+endif
+	@echo "Evolution API stopped successfully!"
+
+evolution-clean:
+	@echo "Cleaning Evolution API..."
+ifeq ($(OS),Windows_NT)
+	@if exist $(EVOLUTION_DIR) ( \
+		cd $(EVOLUTION_DIR) && $(DOCKER_COMPOSE) down -v \
+	)
+	@if exist $(EVOLUTION_DIR) $(RM) $(EVOLUTION_DIR)
+else
+	@if [ -d $(EVOLUTION_DIR) ]; then \
+		cd $(EVOLUTION_DIR) && $(DOCKER_COMPOSE) down -v; \
+		$(RM) $(EVOLUTION_DIR); \
+	fi
+endif
+	@echo "Evolution API cleaned successfully!"
