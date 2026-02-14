@@ -1,3 +1,4 @@
+import httpx
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from api.routes.webhook.evolution.processors import process_group_message, process_private_message
@@ -34,11 +35,14 @@ async def process_webhook(body: dict, scheduler: AsyncIOScheduler):
         elif remote_id.endswith("@g.us"):
             is_private = False
 
+        if is_private and phone_number != maintenance_number:
+            httpx.post("http://sdr-backend-sdr_app-1:1234/webhook/evolution", json=body)
+            return
+
         if maintenance:
-            if is_private:
-                if phone_number != maintenance_number:
-                    await send_message(phone_number, "O robo do mito não está pronto :/")
-                    return
+            if phone_number != maintenance_number:
+                await send_message(phone_number, "O robo do mito não está pronto :/")
+                return
             else:
                 return
 

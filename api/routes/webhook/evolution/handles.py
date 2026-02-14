@@ -9,13 +9,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from database.models.base import User
 from database.models.content import Message
 from database.models.manager import Model
+from database.operations.base import UserRepository
 from database.operations.content import MessageRepository
 from database.operations.manager import ModelRepository
 from api.routes.webhook.evolution.functions import (
     get_resume_conversation, generic_conversation,
     static, animated, remember_generator,
     generate_image, list_images, search_images,
-    token_consumption, transcribe_audio, web_search
+    token_consumption, transcribe_audio, web_search, get_pictures
 )
 from external.evolution import (
     send_message, send_audio, send_sticker,
@@ -32,6 +33,7 @@ COMMANDS = [
     ("!resume", "Faz um resumo das últimas 30 mensagens. _[Ignora o restante da mensagem]_", "utility", []),
     ("!search", "Faz uma pesquisa por termo na internet e retorna um resumo.", "search", []),
     ("!model", "Mostra o modelo sendo utilizado.", "search", []),
+    ("!picture", "Envia a foto dos usuários mencionados", "image", []),
     (
         "!sticker",
         "Cria um sticker com base em uma imagem e texto fornecido. _[Use | como separador de top/bottom]_ \n_(Obs: Mensagens quotadas com !sticker será criado um sticker da mensagem com a foto de perfil de quem enviou)_",
@@ -69,12 +71,13 @@ async def is_message_too_old(timestamp: int, max_minutes: int = 20) -> bool:
     return created_at < (datetime.now() - timedelta(minutes=max_minutes))
 
 
-def clean_text(text: str) -> str:
+def clean_text(text: str, remove_mentions: bool = True) -> str:
     treated_text = text.strip()
     for command, _, _, _ in COMMANDS:
         treated_text = treated_text.replace(command, "")
 
-    treated_text = re.compile(r'@\d{6,15}').sub('', treated_text)
+    if remove_mentions:
+        treated_text = re.compile(r'@\d{6,15}').sub('', treated_text)
     treated_text = re.compile(r'\s*:[a-zA-Z-]+=\S+').sub('', treated_text)
     return treated_text.strip()
 
@@ -189,10 +192,11 @@ async def handle_search_command(
 async def handle_image_command(
         remote_id: str,
         user_id: int,
-        treated_text: str,
+        raw_text: str,
         body: dict,
         group_id: Optional[int] = None
 ):
+    treated_text = clean_text(raw_text, False)
     image_base64, error = await generate_image(user_id, treated_text, body, group_id)
     if error:
         await send_message(remote_id, image_base64)
@@ -355,6 +359,28 @@ async def handle_favorite_message(
     feedback_message = "✅ Mensagem favoritada." if message else "❌ Houve um erro ao favoritar a mensagem."
 
     await send_message(remote_id, feedback_message)
+
+    return
+
+
+async def handle_picture_command(
+    remote_id: str,
+    context: dict[str, any],
+    db: AsyncSession,
+):
+    message_id = context.get("quoted_message")
+    mentions = context.get("mentions")
+
+    if len(mentions) == 0:
+        await send_message(remote_id, "Ninguem foi mencionado.", message_id)
+
+    pictures_for_send = await get_pictures(context, db)
+
+    for type_, picture in pictures_for_send:
+        if type_:
+            await send_image(remote_id, picture)
+        else:
+            await send_message(remote_id, picture, message_id)
 
     return
 
