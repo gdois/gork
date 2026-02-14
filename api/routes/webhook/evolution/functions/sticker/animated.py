@@ -453,7 +453,8 @@ async def animated(message_id: str, caption_text: str = None, effect: str = None
                     durations.append(duration)
 
                     frame_index += 1
-            except EOFError:
+            except EOFError as error:
+                print(error)
                 pass
 
             webp.close()
