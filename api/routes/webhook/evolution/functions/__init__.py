@@ -7,3 +7,4 @@ from api.routes.webhook.evolution.functions.image import list_images, search_ima
 from api.routes.webhook.evolution.functions.resume import get_resume_conversation
 from api.routes.webhook.evolution.functions.transcribe_audio import transcribe_audio
 from api.routes.webhook.evolution.functions.web_search import web_search
+from api.routes.webhook.evolution.functions.picture import get_pictures
