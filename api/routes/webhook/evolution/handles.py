@@ -16,11 +16,12 @@ from api.routes.webhook.evolution.functions import (
     get_resume_conversation, generic_conversation,
     static, animated, remember_generator,
     generate_image, list_images, search_images,
-    token_consumption, transcribe_audio, web_search, get_pictures
+    token_consumption, transcribe_audio, web_search, get_pictures,
+    download_twitter_video, extract_twitter_url
 )
 from external.evolution import (
     send_message, send_audio, send_sticker,
-    send_animated_sticker, send_image, download_media
+    send_animated_sticker, send_image, download_media, send_video
 )
 from services import describe_image, parse_params, action_remember
 from tts import text_to_speech
@@ -63,6 +64,7 @@ COMMANDS = [
     ("!favorite", "Favorita uma mensagem.", "utility", []),
     ("!list", "", "hidden", []),
     ("!remove", "", "hidden", []),
+    ("!twitter", "Baixa o vídeo de um link do X/Twitter e envia. _[Ex: !twitter https://x.com/usuario/status/12345]_", "media", []),
 ]
 
 
@@ -89,7 +91,8 @@ async def handle_help_command(remote_id: str, message_id: str):
         "audio": ("🎙️ *ÁUDIO & TRANSCRIÇÃO*", []),
         "image": ("🖼️ *IMAGENS & STICKERS*", []),
         "reminder": ("⏰ *LEMBRETES*", []),
-        "utility": ("📝 *UTILIDADES*", [])
+        "utility": ("📝 *UTILIDADES*", []),
+        "media": ("📹 *MÍDIA*", []),
     }
 
     for cmd, desc, category, params in COMMANDS:
@@ -462,4 +465,59 @@ async def handle_remove_favorite(
     await message_repo.remove_favorite_message(message_id)
     await send_message(remote_id, "Mensagem removida dos favoritos.")
     return
+
+
+async def handle_twitter_command(
+        remote_id: str,
+        conversation: str,
+        message_id: str
+):
+    """
+    Handler para o comando !twitter. Baixa o vídeo de um link do X/Twitter e envia.
+
+    Args:
+        remote_id: ID do destinatário (telefone ou grupo)
+        conversation: Texto completo da mensagem (contém o link do Twitter)
+        message_id: ID da mensagem para resposta
+    """
+    # Extrai o URL do Twitter/X
+    twitter_url = extract_twitter_url(conversation)
+
+    if not twitter_url:
+        await send_message(
+            remote_id,
+            "❌ Não encontrei um link válido do Twitter/X na mensagem.\n\n"
+            "Exemplo de uso:\n"
+            "`!twitter https://x.com/usuario/status/12345`",
+            message_id
+        )
+        return
+
+    # Envia mensagem de processamento
+    await send_message(remote_id, "⏳ Baixando o vídeo...", message_id)
+
+    # Baixa o vídeo
+    video_bytes, error = await download_twitter_video(twitter_url)
+
+    if error:
+        await send_message(remote_id, f"❌ {error}", message_id)
+        return
+
+    if not video_bytes:
+        await send_message(
+            remote_id,
+            "❌ Não foi possível baixar o vídeo. Verifique se o link está correto e tente novamente.",
+            message_id
+        )
+        return
+
+    # Converte para base64 para envio
+    import base64
+    video_base64 = base64.b64encode(video_bytes).decode('utf-8')
+
+    # Envia o vídeo via WhatsApp
+    await send_video(remote_id, video_base64, message_id)
+
+    await send_message(remote_id, "✅ Vídeo enviado com sucesso!", message_id)
+
 

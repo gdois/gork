@@ -98,3 +98,32 @@ async def get_profile_info(number: str):
     async with httpx.AsyncClient() as client:
         response = await client.post(url, json=payload, headers=headers, timeout=60)
         return response.json()
+
+
+async def send_video(contact_id: str, video_base64: str, quoted_message_id: Optional[str] = None):
+    url = f"{evolution_api}/message/sendMedia/{evolution_instance_name}"
+
+    payload = {
+        "number": contact_id,
+        "mediatype": "video",
+        "fileName": "gork.mp4",
+        "media": video_base64,
+        "mimetype": "video/mp4",
+        "caption": ""
+    }
+
+    if quoted_message_id:
+        payload["quoted"] = {
+            "key": {
+                "id": quoted_message_id
+            }
+        }
+
+    headers = {
+        "Content-Type": "application/json",
+        "apikey": evolution_api_key
+    }
+
+    async with httpx.AsyncClient() as client:
+        response = await client.post(url, json=payload, headers=headers, timeout=60)
+        return response.json()
