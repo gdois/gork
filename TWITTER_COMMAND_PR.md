@@ -1,8 +1,8 @@
-# Pull Request: Add !twitter command to download videos from X/Twitter
+# Pull Request: Add !twitter command to download videos and images from X/Twitter
 
 ## Descrição
 
-Adiciona um novo comando `!twitter` que permite baixar e enviar vídeos do X/Twitter diretamente pelo WhatsApp.
+Adiciona um novo comando `!twitter` que permite baixar e enviar vídeos ou imagens do X/Twitter diretamente pelo WhatsApp.
 
 ## Como usar
 
@@ -16,6 +16,8 @@ ou
 !twitter https://twitter.com/usuario/status/12345
 ```
 
+**O comando detecta automaticamente se o post contém um vídeo ou uma imagem e envia a mídia apropriada!**
+
 ## O que foi implementado
 
 ### 1. Novo módulo: `twitter_video.py`
@@ -24,14 +26,16 @@ Localização: `api/routes/webhook/evolution/functions/twitter_video.py`
 
 Funções criadas:
 - `extract_twitter_url(text: str)`: Extrai URLs do Twitter/X de um texto usando regex
-- `download_twitter_video(twitter_url: str)`: Baixa vídeos usando o serviço twitsave.com
+- `download_twitter_media(twitter_url: str)`: Baixa mídia (vídeo ou imagem) usando o serviço twitsave.com
 
 Funcionalidades:
 - Suporta URLs de twitter.com e x.com
+- **Detecta automaticamente se é vídeo ou imagem**
 - Validação de URL
 - Timeout de 30 segundos
 - Tratamento de erros completo
-- Retorna tupla (video_bytes, error_message)
+- Retorna tupla (media_bytes, media_type, error_message)
+- media_type pode ser "video" ou "image"
 
 ### 2. Função `send_video` no Evolution API
 
@@ -49,17 +53,19 @@ Localização: `api/routes/webhook/evolution/handles.py`
 
 Função `handle_twitter_command(remote_id, conversation, message_id)`:
 1. Extrai o URL do Twitter/X da mensagem
-2. Envia mensagem "Baixando o vídeo..."
-3. Baixa o vídeo usando `download_twitter_video`
-4. Converte para base64
-5. Envia via `send_video`
-6. Envia mensagem de confirmação
+2. Envia mensagem "Baixando a mídia..."
+3. Baixa a mídia usando `download_twitter_media`
+4. Detecta o tipo de mídia (vídeo ou imagem)
+5. Converte para base64
+6. Envia via `send_video` (se vídeo) ou `send_image` (se imagem)
+7. Envia mensagem de confirmação
 
 Tratamento de erros:
 - URL inválido ou não encontrado
 - Erro de download
 - Timeout
 - Falha ao baixar
+- Mídia não encontrada (nem vídeo nem imagem)
 
 ### 4. Atualização da lista de comandos
 
@@ -67,7 +73,7 @@ Localização: `api/routes/webhook/evolution/handles.py`
 
 - Adicionado `!twitter` à lista `COMMANDS`
 - Categoria: "media"
-- Descrição: "Baixa o vídeo de um link do X/Twitter e envia. _[Ex: !twitter https://x.com/usuario/status/12345]_"
+- Descrição: "Baixa vídeos ou imagens de links do X/Twitter e envia. _[Ex: !twitter https://x.com/usuario/status/12345]_"
 - Criada nova categoria "📹 MÍDIA" no help
 
 ### 5. Atualização do processador de comandos
@@ -81,7 +87,7 @@ Localização: `api/routes/webhook/evolution/processors.py`
 
 - `beautifulsoup4` (já estava nas dependências)
 - `httpx` (já estava nas dependências)
-- `twitsave.com` (serviço externo para download de vídeos)
+- `twitsave.com` (serviço externo para download de vídeos e imagens)
 
 ## Arquivos modificados
 
@@ -157,18 +163,26 @@ gh pr create --repo pedrohgoncalvess/gork --title "feat: Add !twitter command to
    ```
    Esperado: mensagem de erro indicando URL inválido
 
-3. URL válido do X/Twitter:
+3. URL válido do X/Twitter com vídeo:
    ```
    !twitter https://x.com/usuario/status/12345
    ```
    Esperado: vídeo baixado e enviado
 
-4. Verificar se o vídeo aparece no WhatsApp com qualidade aceitável
+4. URL válido do X/Twitter com imagem:
+   ```
+   !twitter https://x.com/usuario/status/67890
+   ```
+   Esperado: imagem baixada e enviada
+
+5. Verificar se o vídeo aparece no WhatsApp com qualidade aceitável
+6. Verificar se a imagem aparece no WhatsApp com qualidade aceitável
 
 ## Possíveis melhorias futuras
 
 - Adicionar suporte para escolher qualidade do vídeo
 - Suportar downloads de múltiplos vídeos de uma thread
-- Adicionar cache para evitar downloads repetidos do mesmo vídeo
+- Adicionar cache para evitar downloads repetidos da mesma mídia
 - Adicionar opção para enviar como GIF (se o vídeo for curto)
-- Suportar download de imagens do Twitter/X
+- Suportar download de GIFs do Twitter/X
+- Adicionar opção para baixar legendas/subtitles
