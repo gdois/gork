@@ -17,7 +17,7 @@ from api.routes.webhook.evolution.functions import (
     static, animated, remember_generator,
     generate_image, list_images, search_images,
     token_consumption, transcribe_audio, web_search, get_pictures,
-    download_twitter_video, extract_twitter_url
+    download_twitter_media, extract_twitter_url
 )
 from external.evolution import (
     send_message, send_audio, send_sticker,
@@ -64,7 +64,7 @@ COMMANDS = [
     ("!favorite", "Favorita uma mensagem.", "utility", []),
     ("!list", "", "hidden", []),
     ("!remove", "", "hidden", []),
-    ("!twitter", "Baixa o vídeo de um link do X/Twitter e envia. _[Ex: !twitter https://x.com/usuario/status/12345]_", "media", []),
+    ("!twitter", "Baixa vídeos ou imagens de links do X/Twitter e envia. _[Ex: !twitter https://x.com/usuario/status/12345]_", "media", []),
 ]
 
 
@@ -473,7 +473,7 @@ async def handle_twitter_command(
         message_id: str
 ):
     """
-    Handler para o comando !twitter. Baixa o vídeo de um link do X/Twitter e envia.
+    Handler para o comando !twitter. Baixa mídia (vídeo ou imagem) de um link do X/Twitter e envia.
 
     Args:
         remote_id: ID do destinatário (telefone ou grupo)
@@ -494,30 +494,33 @@ async def handle_twitter_command(
         return
 
     # Envia mensagem de processamento
-    await send_message(remote_id, "⏳ Baixando o vídeo...", message_id)
+    await send_message(remote_id, "⏳ Baixando a mídia...", message_id)
 
-    # Baixa o vídeo
-    video_bytes, error = await download_twitter_video(twitter_url)
+    # Baixa a mídia (vídeo ou imagem)
+    media_bytes, media_type, error = await download_twitter_media(twitter_url)
 
     if error:
         await send_message(remote_id, f"❌ {error}", message_id)
         return
 
-    if not video_bytes:
+    if not media_bytes:
         await send_message(
             remote_id,
-            "❌ Não foi possível baixar o vídeo. Verifique se o link está correto e tente novamente.",
+            "❌ Não foi possível baixar a mídia. Verifique se o link está correto e tente novamente.",
             message_id
         )
         return
 
     # Converte para base64 para envio
     import base64
-    video_base64 = base64.b64encode(video_bytes).decode('utf-8')
+    media_base64 = base64.b64encode(media_bytes).decode('utf-8')
 
-    # Envia o vídeo via WhatsApp
-    await send_video(remote_id, video_base64, message_id)
-
-    await send_message(remote_id, "✅ Vídeo enviado com sucesso!", message_id)
+    # Envia a mídia via WhatsApp de acordo com o tipo
+    if media_type == "video":
+        await send_video(remote_id, media_base64, message_id)
+        await send_message(remote_id, "✅ Vídeo enviado com sucesso!", message_id)
+    else:
+        await send_image(remote_id, media_base64)
+        await send_message(remote_id, "✅ Imagem enviada com sucesso!", message_id)
 
 

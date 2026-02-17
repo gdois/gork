@@ -11,49 +11,56 @@ def extract_twitter_url(text: str) -> str | None:
     return match.group(0) if match else None
 
 
-async def download_twitter_video(twitter_url: str) -> tuple[bytes | None, str | None]:
+async def download_twitter_media(twitter_url: str) -> tuple[bytes | None, str, str | None]:
     """
-    Baixa o vídeo do Twitter/X usando twitsave.com
+    Baixa mídia (vídeo ou imagem) do Twitter/X usando twitsave.com
 
     Returns:
-        tuple: (video_bytes, error_message)
+        tuple: (media_bytes, media_type, error_message)
+                media_type: "video" ou "image"
     """
     try:
         # Verifica se o URL é válido
         parsed = urlparse(twitter_url)
         if not parsed.netloc in ['twitter.com', 'x.com']:
-            return None, "URL inválido. Deve ser do twitter.com ou x.com"
+            return None, "", "URL inválido. Deve ser do twitter.com ou x.com"
 
         # Usa twitsave.com para baixar
         api_url = "https://twitsave.com/info"
 
         async with httpx.AsyncClient(timeout=30.0) as client:
-            # Primeiro, obtém informações do vídeo
+            # Primeiro, obtém informações da mídia
             response = await client.post(api_url, data={"url": twitter_url})
             response.raise_for_status()
 
             soup = BeautifulSoup(response.text, 'html.parser')
 
-            # Procura pelo link de download de maior qualidade
+            # Procura por vídeo primeiro
             video_element = soup.find('a', {'class': 'twitsave-btn'})
 
-            if not video_element:
-                return None, "Não foi possível encontrar o vídeo"
+            if video_element:
+                media_url = video_element.get('href')
+                if media_url:
+                    # Baixa o vídeo
+                    video_response = await client.get(media_url)
+                    video_response.raise_for_status()
+                    return video_response.content, "video", None
 
-            video_url = video_element.get('href')
+            # Se não encontrou vídeo, procura por imagem
+            image_element = soup.find('img', {'class': 'twitsave-img'})
+            if image_element:
+                media_url = image_element.get('src')
+                if media_url:
+                    # Baixa a imagem
+                    image_response = await client.get(media_url)
+                    image_response.raise_for_status()
+                    return image_response.content, "image", None
 
-            if not video_url:
-                return None, "Não foi possível obter o link do vídeo"
-
-            # Baixa o vídeo
-            video_response = await client.get(video_url)
-            video_response.raise_for_status()
-
-            return video_response.content, None
+            return None, "", "Não foi possível encontrar mídia (vídeo ou imagem) no post"
 
     except httpx.TimeoutException:
-        return None, "Timeout ao baixar o vídeo. Tente novamente."
+        return None, "", "Timeout ao baixar a mídia. Tente novamente."
     except httpx.HTTPStatusError as e:
-        return None, f"Erro HTTP ao baixar vídeo: {e.response.status_code}"
+        return None, "", f"Erro HTTP ao baixar mídia: {e.response.status_code}"
     except Exception as e:
-        return None, f"Erro ao baixar vídeo: {str(e)}"
+        return None, "", f"Erro ao baixar mídia: {str(e)}"
